@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://viking818.github.io/hearth/ru/">Сайт</a> ·
   <a href="README.md">English</a> ·
   <a href="#скачать">Скачать</a> ·
   <a href="docs/FEATURES.md">Все возможности (англ.)</a> ·

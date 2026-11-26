@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Hearth: the picture shown when the link is shared</title>
+<!-- Open at 640×320 and take a screenshot at double size to get social.png (1280×640). -->
+<style>
+  html, body { margin: 0; }
+  body { width: 640px; height: 320px; overflow: hidden; position: relative; background: #fff7f0;
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1c1917; }
+  .glow { position: absolute; inset: 0; background: radial-gradient(520px 320px at 96% 110%, #fed7aa 0%, rgba(254, 215, 170, 0) 70%); }
+  .text { position: absolute; left: 40px; top: 34px; width: 282px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 19px; }
+  .brand img { width: 30px; height: 30px; }
+  h1 { font-size: 30px; line-height: 1.1; letter-spacing: -0.03em; font-weight: 800; margin: 20px 0 0; }
+  p { font-size: 13.5px; line-height: 1.45; color: #57534e; margin: 12px 0 0; }
+  .tags { position: absolute; left: 40px; bottom: 30px; display: flex; gap: 6px; font-size: 11.5px; font-weight: 600; }
+  .tags span { padding: 5px 10px; border-radius: 999px; background: #fff; border: 1px solid #f1d9c6; color: #9a3412; }
+  .shot { position: absolute; left: 350px; top: 40px; width: 520px; border-radius: 10px; overflow: hidden;
+    border: 1px solid #e0d6cc; box-shadow: 0 16px 40px rgba(124, 45, 18, 0.2); }
+  .shot img { display: block; width: 100%; }
+</style>
+<div class="glow"></div>
+<div class="text">
+  <div class="brand"><img src="logo.svg" alt="">Hearth</div>
+  <h1>AI that runs on your own computer</h1>
+  <p>Chat, documents, voice, pictures, video and bots. No account, no cloud.</p>
+</div>
+<div class="tags"><span>Free</span><span>Mac and Windows</span><span>Open source</span></div>
+<div class="shot"><img src="screenshots/chat.png" alt=""></div>

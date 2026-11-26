@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth — AI that runs on your own computer</title>
+<meta name="description" content="A free app for Mac and Windows that runs open AI models on your own computer: chat, documents, voice, pictures, video and bots. No account, no subscription, no cloud.">
+<link rel="canonical" href="https://viking818.github.io/hearth/">
+<link rel="alternate" hreflang="en" href="https://viking818.github.io/hearth/">
+<link rel="alternate" hreflang="ru" href="https://viking818.github.io/hearth/ru/">
+<link rel="alternate" hreflang="x-default" href="https://viking818.github.io/hearth/">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Hearth — AI that runs on your own computer">
+<meta property="og:description" content="A free app for Mac and Windows that runs open AI models on your own computer: chat, documents, voice, pictures, video and bots. No account, no subscription, no cloud.">
+<meta property="og:url" content="https://viking818.github.io/hearth/">
+<meta property="og:image" content="https://viking818.github.io/hearth/social.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="site.css">
+</head>
+<body data-lang="en">
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="#top"><img src="logo.svg" width="28" height="28" alt=""><span>Hearth</span></a>
+    <nav class="nav">
+      <a href="#features">What it does</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/Viking818/hearth">GitHub</a>
+      <a class="lang" href="ru/" hreflang="ru" data-lang-link>Русский</a>
+      <a class="btn small" href="#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+<section class="hero wrap">
+  <h1>AI that runs on your own computer</h1>
+  <p class="lead">Hearth is a free app for Mac and Windows. It downloads open AI models and runs them on your machine: chat, documents, voice, pictures, video and bots that work for you. No account, no subscription, no cloud.</p>
+  <div class="cta">
+    <a class="btn big" href="#download" data-main-download data-win="Download for Windows" data-mac="Download for Mac"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span>Download</span></a>
+    <a class="btn big ghost" href="https://github.com/Viking818/hearth">Source code on GitHub</a>
+  </div>
+  <p class="under"><span data-hint data-win="Setup program. No administrator rights needed." data-mac="For a Mac with Apple Silicon (M1 or newer).">For Windows 10 and 11, and for a Mac with Apple Silicon.</span> Free and open source · version <span data-version>0.2.33</span>.</p>
+  <div class="frame hero-shot">
+    <picture>
+      <source srcset="screenshots/chat-dark.png" media="(prefers-color-scheme: dark)">
+      <img src="screenshots/chat.png" width="1800" height="1250" alt="The Hearth chat window" fetchpriority="high" decoding="async">
+    </picture>
+  </div>
+</section>
+
+<section class="wrap facts">
+  <div class="fact"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg><h3>Everything stays with you</h3><p>Your chats and files live in a folder on your computer. Hearth listens to this computer only.</p></div>
+  <div class="fact"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><h3>No account, no subscription</h3><p>Download it and use it. The models are open and free, and you choose which ones to get.</p></div>
+  <div class="fact"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg><h3>Your processor or graphics card</h3><p>Hearth checks your computer and marks the models that will run well on it.</p></div>
+</section>
+
+<section class="wrap" id="features">
+  <h2>What it does</h2>
+  <div class="show">
+    <div class="show-text"><h3>It tells you which model fits</h3><p>Open Models and Hearth shows your processor, memory and graphics card, then marks the sizes that run well. Models you already have in LM Studio or Ollama are found and used as they are.</p></div>
+    <div class="frame"><img src="screenshots/models.png" width="1800" height="1250" alt="The Models screen with the sizes that run well marked" loading="lazy" decoding="async"></div>
+  </div>
+  <div class="show flip">
+    <div class="show-text"><h3>Bots that work on their own</h3><p>Give a bot a task or a schedule, and write to it from your phone through its own Telegram bot, by text or by voice. It reads the files you send and writes documents and tables back.</p></div>
+    <div class="frame"><img src="screenshots/bots.png" width="1800" height="1250" alt="The Bots screen" loading="lazy" decoding="async"></div>
+  </div>
+  <div class="show">
+    <div class="show-text"><h3>Talk instead of typing</h3><p>Speak a question, or have a whole conversation by voice. Speech is recognized on your computer, and answers can be read aloud in a natural voice.</p></div>
+    <div class="frame"><img src="screenshots/voice.png" width="1800" height="1250" alt="Voice settings" loading="lazy" decoding="async"></div>
+  </div>
+  <div class="show flip">
+    <div class="show-text"><h3>Connect your services</h3><p>Connectors, skills and plugins in Claude’s formats, with a directory of about 60 services. Each connector is off until you switch it on.</p></div>
+    <div class="frame"><img src="screenshots/customize.png" width="1800" height="1250" alt="The Customize screen with connectors" loading="lazy" decoding="async"></div>
+  </div>
+  <div class="show phone">
+    <div class="show-text"><h3>From your phone, too</h3><p>Scan a QR code on the computer’s screen and use the whole app from a phone or tablet on the same Wi-Fi. The model still runs on your computer.</p></div>
+    <div class="phone-shot"><img src="screenshots/phone.png" width="508" height="1100" alt="Hearth on a phone" loading="lazy" decoding="async"></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>And more</h2>
+  <div class="grid">
+    <div class="card"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><h3>Chat with documents</h3><p>Text, images, PDF, Word, Excel and PowerPoint. Search every chat, branch a conversation, pin and archive.</p></div>
+    <div class="card"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg><h3>It looks things up</h3><p>The model searches the web, opens pages and reads the folders you allow. Every step shows in the chat.</p></div>
+    <div class="card"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></svg><h3>Pictures and video</h3><p>Draw pictures and make short clips with sound, on your own graphics card.</p></div>
+    <div class="card"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.2" fill="currentColor"/><circle cx="17.5" cy="10.5" r="1.2" fill="currentColor"/><circle cx="8.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="6.5" cy="12.5" r="1.2" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg><h3>Design and small apps</h3><p>Posters, social posts, logos and small web apps the model writes, with a live preview.</p></div>
+    <div class="card"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg><h3>Hundreds of files at once</h3><p>One instruction for a folder of photos or documents, saved as an Excel table.</p></div>
+    <div class="card"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><h3>A model for other apps</h3><p>A local API that speaks the OpenAI and Anthropic formats, for coding tools and anything else that uses them.</p></div>
+  </div>
+</section>
+
+<section class="band" id="download">
+  <div class="wrap">
+    <h2>Download Hearth</h2>
+    <p class="band-lead">Free. Node.js comes inside the packages, so there is nothing else to install. <span class="muted">version <span data-version>0.2.33</span></span></p>
+    <div class="files">
+      <div class="file" data-os="win">
+        <h3>Windows 10 or 11</h3>
+        <p class="kind">Setup program · <span data-size="setup">24</span> MB</p>
+        <p>Run it. No administrator rights are needed. It adds Start menu and desktop shortcuts.</p>
+        <a class="btn" href="https://github.com/Viking818/hearth/releases/download/v0.2.33/Hearth-Setup-0.2.33.exe" data-asset="setup"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span>Download</span></a>
+      </div>
+      <div class="file" data-os="mac">
+        <h3>Mac with Apple Silicon</h3>
+        <p class="kind">M1 or newer · <span data-size="mac">38</span> MB</p>
+        <p>Unzip it and move Hearth to Applications.</p>
+        <a class="btn" href="https://github.com/Viking818/hearth/releases/download/v0.2.33/Hearth-0.2.33-mac-arm64.zip" data-asset="mac"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span>Download</span></a>
+      </div>
+      <div class="file" data-os="win">
+        <h3>Windows, without installing</h3>
+        <p class="kind">Zip archive · <span data-size="zip">35</span> MB</p>
+        <p>Unzip it anywhere and double-click Hearth.vbs.</p>
+        <a class="btn" href="https://github.com/Viking818/hearth/releases/download/v0.2.33/Hearth-Windows-0.2.33.zip" data-asset="zip"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span>Download</span></a>
+      </div>
+    </div>
+    <p class="linux">Linux, or a Mac with an Intel chip? Hearth runs from the source code: <a href="https://github.com/Viking818/hearth#run-from-source">how to run it</a>.</p>
+    <div class="notes">
+      <div class="note warn">
+        <h3>The first start shows a warning</h3>
+        <p>The packages are not signed yet, so the system asks before opening them.</p>
+        <ul><li><b>Windows:</b> “Windows protected your PC” → <b>More info</b> → <b>Run anyway</b>.</li><li><b>Mac:</b> System Settings → Privacy &amp; Security → <b>Open Anyway</b> next to Hearth.</li></ul>
+      </div>
+      <div class="note">
+        <h3>First steps</h3>
+        <ol><li>Open <b>Models</b>. Hearth shows your processor, memory and graphics card.</li><li>Click <b>Download engine</b> if the Engine card asks for it. Hearth picks the right build for your computer.</li><li>Pick a model marked <b>Runs well</b> and download it.</li><li>Click <b>Load</b> and start chatting.</li></ol>
+      </div>
+      <div class="note">
+        <h3>What your computer needs</h3>
+        <ul><li><b>Memory:</b> 16 GB runs the small models well; 32 GB or more runs the strong ones. A graphics card with 8 GB or more makes everything faster, but is not required.</li><li><b>Disk:</b> a model takes from 4 GB to 80 GB. Pictures need about 11 GB more, video about 25 GB more.</li><li>Hearth ships no model and no engine. It downloads what you choose, when you press Download.</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap" id="privacy">
+  <h2>Privacy</h2>
+  <ul class="priv">
+    <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg><span>Hearth runs on your computer and listens on this computer only. Your chats and files stay in your own data folder.</span></li>
+    <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg><span>Nothing is sent anywhere unless you use a tool that needs the internet: a web search, opening a page, a connector you switched on, or a Telegram bot you connected.</span></li>
+    <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg><span>Web tools open public addresses only, never your computer or home network. Bots write only inside their own work folder.</span></li>
+    <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg><span>Everything Hearth downloads to run comes from its maker’s official releases and is checked against a checksum first.</span></li>
+  </ul>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <p>Hearth is a personal project, free under the MIT license. The screenshots show sample data.</p>
+    <p class="foot-links"><a href="https://github.com/Viking818/hearth">GitHub</a><a href="https://github.com/Viking818/hearth/blob/main/docs/FEATURES.md">All features</a><a href="https://github.com/Viking818/hearth/releases">All versions</a><a href="https://github.com/Viking818/hearth/issues">Report a problem</a><a href="ru/" data-lang-link>Русский</a></p>
+  </div>
+</footer>
+<script src="site.js" defer></script>
+</body>
+</html>

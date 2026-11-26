@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://viking818.github.io/hearth/">Website</a> ·
   <a href="README.ru.md">Русский</a> ·
   <a href="#download">Download</a> ·
   <a href="docs/FEATURES.md">All features</a> ·
@@ -114,6 +115,8 @@ Build the packages yourself (on a Mac):
 mac/build.sh              # dist/Hearth.app
 windows/package.sh        # dist/Hearth-Windows-<version>.zip and, with NSIS installed, Hearth-Setup-<version>.exe
 ```
+
+The website in `docs/` is written by `node scripts/build-site.mjs` (both languages from one list of words).
 
 A map of the code is at the end of [docs/FEATURES.md](docs/FEATURES.md#for-developers).
 
