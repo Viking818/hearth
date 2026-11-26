@@ -43,7 +43,7 @@ The long version. For a quick look, see the [README](../README.md).
     gives one out (for GitHub, a personal access token). When connectors bring many tools with long instructions
     (Notion: 77 tools, about 78,000 tokens), the model gets their names only and looks one up when it needs it
     (`find_tool`, `use_tool`), so every message stays short on a local model.
-- **Bots** (like the Hermes agent or Grok Bot, but on your own computer): a bot takes a task and does it step by step
+- **Bots** (helpers that work on their own, on your own computer): a bot takes a task and does it step by step
   with its tools until it has the result: it searches the web, reads pages, writes and changes files in its own **work
   folder** (`Documents/Hearth Bots/<name>`: texts, Excel tables, web pages), uses skills, connectors and memory if you
   let it. It runs in Hearth, so it goes on with the window closed; bots work one at a time. Each bot has a
@@ -94,7 +94,7 @@ The long version. For a quick look, see the [README](../README.md).
 - **Connect apps**: a local **OpenAI-compatible** API at `http://127.0.0.1:7420/v1` and an **Anthropic-compatible** API at
   `http://127.0.0.1:7420`, with copy-paste setup for Claude Code, Codex, OpenCode, Python and curl, and a one-click check.
 - **Phone and tablet**: turn it on in Settings, scan the QR code, and use the whole app from a phone on the same Wi-Fi.
-- **Model settings** (the sliders button next to each model, like Strata's version panel): conversation context,
+- **Model settings** (the sliders button next to each model): conversation context,
   drafting (automatic, the model's MTP draft, guesses from the text, or off), computer use (*leave 20% for my work* or
   *full performance*), reading pictures (on the GPU or the processor), and for experts the context memory (F16, INT8,
   INT4), low-RAM mode (experts from the SSD), several models at once and extra engine options. The memory estimate
@@ -175,7 +175,7 @@ before loading it.
 For big mixture-of-experts models, a model's settings offer **Engine: llama.cpp or Colibri**
 ([JustVugg/colibri](https://github.com/JustVugg/colibri), Apache 2.0). Colibri places the experts by how often they are
 used: the hottest on the graphics card (Vulkan on any card, CUDA on NVIDIA), warm ones in memory, the rest read from the
-disk; and it keeps a conversation's state between turns, so an agent's next turn (Hermes, say) reads only what is new.
+disk; and it keeps a conversation's state between turns, so an agent's next turn reads only what is new.
 Its author measured Qwen3.8-Flash-Next writing about 50 tokens a second on a 24 GB card with 62 GB of RAM.
 
 - **Download** in the model's settings: Hearth fetches Colibri's newest release from GitHub and checks it against the
