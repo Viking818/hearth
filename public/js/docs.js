@@ -1,11 +1,12 @@
 // Text out of documents: PDF (with pdf.js), Word, Excel and PowerPoint (they are zip files of XML).
 // Works in the page and on the server; neither needs anything installed.
 
+const MAX_PART = 96 << 20; // the most one part of a document may be when unpacked
 export const DOC_EXT = /\.(pdf|docx|xlsx|xlsm|pptx|odt|ods|odp)$/i;
 
 // ---- Zip ----
 
-function readZip(bytes) {
+function readZip(bytes, maxPart = MAX_PART) {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
@@ -43,8 +44,28 @@ function readZip(bytes) {
       const raw = bytes.subarray(start, start + e.csize);
       if (e.method === 0) return dec.decode(raw);
       if (e.method !== 8) throw new Error('unsupported zip compression');
-      const out = new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')));
-      return dec.decode(await out.arrayBuffer());
+      // No part of a document is this big unpacked: a few kilobytes can be made to unpack into gigabytes, which would
+      // take the memory of the page, or of the whole program when a bot reads the file.
+      const reader = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+      const parts = [];
+      let size = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > maxPart) {
+          reader.cancel().catch(() => {});
+          throw new Error('this document is too big to read');
+        }
+        parts.push(value);
+      }
+      const all = new Uint8Array(size);
+      let at = 0;
+      for (const part of parts) {
+        all.set(part, at);
+        at += part.length;
+      }
+      return dec.decode(all);
     },
   };
 }
@@ -236,7 +257,8 @@ async function pdfText(bytes, pdfjs, { maxPages = 500 } = {}) {
  * name: file name; bytes: Uint8Array. opts.pdfjs: the pdf.js module (needed for PDF).
  * Returns { kind, text, pages?, totalPages?, scanned?, truncated }.
  */
-export async function extractDocument(name, bytes, { pdfjs, maxChars = 400000 } = {}) {
+// maxPart: the most one unpacked part of the document may be (the tests use a small one).
+export async function extractDocument(name, bytes, { pdfjs, maxChars = 400000, maxPart } = {}) {
   const ext = (/\.(\w+)$/.exec(name)?.[1] || '').toLowerCase();
   let r;
   if (ext === 'pdf') {
@@ -244,7 +266,7 @@ export async function extractDocument(name, bytes, { pdfjs, maxChars = 400000 } 
     const p = await pdfText(bytes, pdfjs);
     r = { kind: 'pdf', text: p.pages.map((s, i) => `--- Page ${i + 1} ---\n${s}`).join('\n\n'), pages: p.pages, totalPages: p.total, scanned: p.scanned, truncated: p.pages.length < p.total };
   } else {
-    const zip = readZip(bytes);
+    const zip = readZip(bytes, maxPart);
     if (ext === 'docx') r = { kind: 'word', text: docxBody(await zip.text('word/document.xml')) };
     else if (ext === 'xlsx' || ext === 'xlsm') r = { kind: 'excel', ...(await xlsxText(zip)) };
     else if (ext === 'pptx') r = { kind: 'powerpoint', text: await pptxText(zip) };

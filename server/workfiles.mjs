@@ -6,7 +6,7 @@ import path from 'node:path';
 import { allowedRoots, readResolved, MAX_RESULT } from './tools.mjs';
 import { workFolder } from './bots.mjs';
 import { fetchPublic } from './web.mjs';
-import { IS_WIN } from './util.mjs';
+import { IS_WIN, isNetworkPath } from './util.mjs';
 import { t } from './i18n.mjs';
 
 const MAX_WRITE = 5 << 20;
@@ -85,6 +85,7 @@ function readRoots(bot, folders) {
 export function forRead(bot, p, folders = false) {
   const { work, read } = readRoots(bot, folders);
   const raw = String(p ?? '').trim();
+  if (isNetworkPath(raw)) throw new Error(t('That path is outside your work folder.')); // before the system is asked about it
   const abs = !raw ? work : path.isAbsolute(raw) ? raw : path.join(work, raw);
   let real;
   try {
@@ -205,15 +206,30 @@ async function download(bot, url, name) {
   const r = await fetchPublic(String(url || ''), { maxBytes: MAX_DOWNLOAD, timeout: 120000, headers: { accept: '*/*' } });
   if (r.status >= 400) throw new Error(t('The page answered with an error ({status}).', { status: r.status }));
   if (r.cut) throw new Error(t('The file is bigger than 50 MB.'));
+  return saveDownloaded(bot, r, name);
+}
+
+// r: what the server answered ({ url, headers, body }). name: the name the bot asked for, if it gave one.
+export function saveDownloaded(bot, r, name) {
   const type = String(r.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   let base = String(name || '').trim();
-  if (!base) {
-    const disp = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(String(r.headers['content-disposition'] || ''))?.[1];
-    base = decodeURIComponent(disp || path.basename(new URL(r.url).pathname) || '') || 'download';
+  const chosen = Boolean(base); // the bot named the file itself
+  if (!chosen) {
+    // The name the server suggests is only a name: no folders in it, no leading dots, and it never replaces a file
+    // that is already there (a server must not be able to overwrite the owner's work by naming its download after it).
+    let raw = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(String(r.headers['content-disposition'] || ''))?.[1] || path.basename(new URL(r.url).pathname) || '';
+    try {
+      raw = decodeURIComponent(raw);
+    } catch {} // a stray % sign: the name is used as it came
+    base = raw.split(/[\\/]/).pop().replace(/^[\s.]+/, '').slice(0, 120) || 'download';
   }
   base = base.replace(/[\\:*?"<>|\u0000-\u001f]+/g, '-');
   if (!path.extname(base) && EXT_OF[type]) base += EXT_OF[type];
-  const file = forWrite(bot, base);
+  let file = forWrite(bot, base);
+  if (!chosen) {
+    const ext = path.extname(base);
+    for (let n = 2; fs.existsSync(file) && n < 1000; n++) file = forWrite(bot, `${base.slice(0, base.length - ext.length)} (${n})${ext}`);
+  }
   fs.writeFileSync(file, r.body);
   return { file, size: r.body.length };
 }

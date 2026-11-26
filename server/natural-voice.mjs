@@ -186,6 +186,8 @@ export function wordsFor(text, lang) {
   let s = String(text || '');
   if (lang === 'ru') s = spellNumbers(s.replace(/№\s*/g, 'номер '));
   else if (lang === 'en') s = spellNumbersEn(s);
+  // The program takes a text that starts with a dash for one of its own options: no text begins with one.
+  s = s.replace(/^[\s\-–—]+/, '');
   return s.replace(/[«»„“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s*[—–]\s*/g, ' — ').replace(/\s+/g, ' ').trim();
 }
 

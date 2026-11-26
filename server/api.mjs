@@ -1,6 +1,7 @@
 // The local AI API on /v1: OpenAI-compatible (chat/completions, completions, embeddings, responses)
 // and Anthropic-compatible (messages, count_tokens). Requests go to the engine; Hearth logs each one
 // for the Monitor and loads the last model on demand, so coding tools work even right after a restart.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getSettings, DIRS } from './settings.mjs';
@@ -53,8 +54,19 @@ export function apiAllowed(req) {
   if (isLoopback(req.socket.remoteAddress)) return true;
   // A paired phone's own page (its Origin is the address it opened Hearth at).
   if (pairedDevice(req) && (!origin || new URL(origin).host === req.headers.host)) return true;
-  return getSettings().access === 'lan' && keyOf(req) === getSettings().apiKey;
+  return getSettings().access === 'lan' && sameKey(keyOf(req), getSettings().apiKey);
 }
+
+// Compares two keys in the same time whatever they hold.
+function sameKey(a, b) {
+  const x = crypto.createHash('sha256').update(String(a)).digest();
+  const y = crypto.createHash('sha256').update(String(b)).digest();
+  return Boolean(a) && crypto.timingSafeEqual(x, y);
+}
+
+// The caller is Hearth's own page (on this computer or on a paired device), or a program on this computer: not a
+// device on the network that only holds the API key. Such a device gets the model, and nothing of the app.
+const appSide = (req) => isLoopback(req.socket.remoteAddress) || Boolean(pairedDevice(req));
 
 function lastModelFinder(last) {
   const list = listLocalModels(true);
@@ -71,26 +83,29 @@ function uploadToData(url) {
   return { mime, b64: fs.readFileSync(file).toString('base64') };
 }
 
-function prepareBody(body, kind, req) {
+export function prepareBody(body, kind, req) {
   if (!body || typeof body !== 'object') return body;
-  for (const msg of body.messages || []) {
-    if (!Array.isArray(msg.content)) continue;
+  const trusted = appSide(req);
+  for (const msg of Array.isArray(body.messages) ? body.messages : []) {
+    if (!msg || !Array.isArray(msg.content)) continue;
     for (const part of msg.content) {
-      if (part.type === 'image_url' && part.image_url?.url) {
-        const d = uploadToData(part.image_url.url);
-        if (d) part.image_url.url = `data:${d.mime};base64,${d.b64}`;
-      } else if (part.type === 'image' && part.source?.type === 'url') {
-        const d = uploadToData(part.source.url);
-        if (d) part.source = { type: 'base64', media_type: d.mime, data: d.b64 };
-      }
+      if (!part || typeof part !== 'object') continue;
+      const url = part.type === 'image_url' ? part.image_url?.url : part.type === 'image' && part.source?.type === 'url' ? part.source.url : '';
+      if (!url) continue;
+      const d = uploadToData(url);
+      if (d && part.type === 'image_url') part.image_url.url = `data:${d.mime};base64,${d.b64}`;
+      else if (d) part.source = { type: 'base64', media_type: d.mime, data: d.b64 };
+      // Any other address would be fetched by the engine itself, from this computer and with none of the checks
+      // Hearth's own web tools make. A device on the network may send a picture's bytes, not an address to visit.
+      else if (!trusted && !/^data:/i.test(String(url))) throw Object.assign(new Error(t('Send the picture itself (a data: address), not a link to it.')), { status: 400 });
     }
   }
   // Coding tools are much faster without "thinking"; the user can switch this in Settings.
-  const fromChat = req.headers['x-hearth-client'] === 'chat';
-  if (fromChat && body.hearth) {
-    addChatContext(body, body.hearth);
-    delete body.hearth;
-  }
+  // The chat's own context (memory, the user's instructions, assistants, skills) goes only to the chat page: the
+  // header that asks for it is ignored from a network device that merely holds the API key.
+  const fromChat = req.headers['x-hearth-client'] === 'chat' && trusted;
+  if (fromChat && body.hearth) addChatContext(body, body.hearth);
+  delete body.hearth;
   if (!fromChat && getSettings().apiThinking === 'off' && body.chat_template_kwargs?.enable_thinking === undefined) {
     body.chat_template_kwargs = { ...(body.chat_template_kwargs || {}), enable_thinking: false };
     if (kind === 'anthropic') delete body.thinking;
@@ -206,6 +221,12 @@ export async function handleApi(req, res, url) {
   } catch {
     return sendApiError(res, kind, 400, t('Body is not valid JSON'));
   }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return sendApiError(res, kind, 400, t('Body is not valid JSON'));
+  try {
+    body = prepareBody(body, kind, req); // before any model is loaded: a refused request costs nothing
+  } catch (err) {
+    return sendApiError(res, kind, err.status || 400, err.message);
+  }
 
   const countOnly = p.endsWith('/count_tokens');
   const r = countOnly ? null : beginRequest({ api: kind, path: p, client: clientName(req), stream: Boolean(body.stream) });
@@ -217,7 +238,6 @@ export async function handleApi(req, res, url) {
     return sendApiError(res, kind, 503, msg);
   }
 
-  body = prepareBody(body, kind, req);
   // Several models loaded: the request goes to the one it names; anything else goes to the default one.
   const target = await resolveEngine(typeof body.model === 'string' ? body.model : '');
   if (!target) {

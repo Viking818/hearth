@@ -243,8 +243,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
   func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
     if action.shouldPerformDownload { return decisionHandler(.download) }
     if let url = action.request.url, let scheme = url.scheme, ["http", "https", "mailto"].contains(scheme), url.host != base.host || url.port != base.port {
-      NSWorkspace.shared.open(url)
-      return decisionHandler(.cancel)
+      // Hearth's own page going elsewhere, or a link the user clicked, opens in the normal browser. A frame that
+      // shows a page the model wrote does not get that: it may load something inside itself, like in any browser,
+      // but it cannot make the system open addresses or write mails by itself.
+      let mainFrame = action.targetFrame?.isMainFrame ?? true
+      if mainFrame || action.navigationType == .linkActivated {
+        NSWorkspace.shared.open(url)
+        return decisionHandler(.cancel)
+      }
+      if scheme == "mailto" { return decisionHandler(.cancel) }
     }
     decisionHandler(.allow)
   }

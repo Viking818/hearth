@@ -122,17 +122,26 @@ test('many long connector tools: names in the instructions, find_tool shows one 
   assert.match(await tools.callTool('find_tool', { query: 'zzzz qqqq' }), /No connector tool matches/);
 
   // use_tool: by the full name or the tool's own name; arguments as an object or as JSON text.
-  assert.equal(await tools.callTool('use_tool', { name: 'notes-create-pages', arguments: { title: 'Ink order' } }), 'notes-create-pages: {"title":"Ink order"}');
-  assert.equal(await tools.callTool('use_tool', { name: 'notes__notes-search', arguments: '{"title":"blue"}' }), 'notes-search: {"title":"blue"}');
-  assert.equal(await tools.callTool('use_tool', { name: 'calc:add', arguments: { a: 2, b: 3 } }), '5');
+  // 0.2.33: with "ask first" on (the default), the server runs a connector tool only when it is told which tool the
+  // user allowed, and that is the tool about to run. The page asks; the server holds it to the answer.
+  await assert.rejects(tools.callTool('use_tool', { name: 'notes-create-pages', arguments: { title: 'x' } }), /needs your approval first/, 'no answer from the user: not run');
+  await assert.rejects(tools.callTool('use_tool', { name: ' notes__notes-create-pages', arguments: { title: 'x' } }), /needs your approval first/, 'a name the page would not recognise is not a way round');
+  await assert.rejects(tools.callTool('use_tool', { name: 'notes-create-pages', arguments: { title: 'x' } }, { approved: 'notes__notes-search' }), /needs your approval first/, 'allowing one tool does not allow another');
+  assert.equal(await tools.callTool('use_tool', { name: 'notes-create-pages', arguments: { title: 'bot' } }, { anyway: true }), 'notes-create-pages: {"title":"bot"}', 'a bot works unattended and never asks');
+  updateSettings({ toolApproval: 'auto' });
+  assert.equal(await tools.callTool('use_tool', { name: 'notes-create-pages', arguments: { title: 'auto' } }), 'notes-create-pages: {"title":"auto"}', 'the user chose not to be asked');
+  updateSettings({ toolApproval: 'ask' });
+  assert.equal(await tools.callTool('use_tool', { name: 'notes-create-pages', arguments: { title: 'Ink order' } }, { approved: 'notes__notes-create-pages' }), 'notes-create-pages: {"title":"Ink order"}');
+  assert.equal(await tools.callTool('use_tool', { name: 'notes__notes-search', arguments: '{"title":"blue"}' }, { approved: 'notes__notes-search' }), 'notes-search: {"title":"blue"}');
+  assert.equal(await tools.callTool('use_tool', { name: 'calc:add', arguments: { a: 2, b: 3 } }, { approved: 'calc__add' }), '5');
   await assert.rejects(tools.callTool('use_tool', { name: 'notes-nothing' }), /No connector tool named “notes-nothing”/);
-  await assert.rejects(tools.callTool('use_tool', { name: 'notes-search', arguments: '{oops' }), /must be a JSON object/);
+  await assert.rejects(tools.callTool('use_tool', { name: 'notes-search', arguments: '{oops' }, { approved: 'notes__notes-search' }), /must be a JSON object/);
 
   // Two different connectors with the same tool name: the model is told which names to use.
   updateSettings({ mcpConfig: JSON.stringify({ mcpServers: { notes: program('mcp-many-mock.mjs'), other: program('mcp-many-mock.mjs') } }) });
   await tools.listTools();
   await assert.rejects(tools.callTool('use_tool', { name: 'notes-search' }), /Several connectors have a tool named “notes-search”: notes__notes-search, other__notes-search/);
-  assert.equal(await tools.callTool('use_tool', { name: 'other__notes-search', arguments: {} }), 'notes-search: {}');
+  assert.equal(await tools.callTool('use_tool', { name: 'other__notes-search', arguments: {} }, { approved: 'other__notes-search' }), 'notes-search: {}');
   updateSettings({ mcpConfig: '' });
   await mcp.ensureMcp();
 });

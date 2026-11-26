@@ -419,16 +419,21 @@ export function pluginMcp(dir, manifest) {
 const VAR = /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g;
 export function connectorNeeds(cfg) {
   const names = new Set();
-  JSON.stringify(cfg).replace(VAR, (_, n, def) => (n !== 'CLAUDE_PLUGIN_ROOT' && def === undefined && names.add(n), ''));
+  // For a web-address connector every name counts, also one with a fallback: nothing is filled in behind the user's back.
+  JSON.stringify(cfg).replace(VAR, (_, n, def) => (n !== 'CLAUDE_PLUGIN_ROOT' && (def === undefined || cfg?.url) && names.add(n), ''));
   return [...names];
 }
 
+// A connector that is a program may also use this computer's own settings (its environment): the program could read
+// them anyway. A connector that is a web address may not: a name it writes there would send that setting, which can
+// be a key for another service, to its own server without the user ever seeing it. It gets only what the user typed.
 export function fillConnector(cfg, values) {
   const missing = new Set();
+  const fromEnv = !cfg?.url;
   const fill = (v) => {
     if (typeof v === 'string')
       return v.replace(VAR, (_, n, def) => {
-        const got = values[n] ?? process.env[n];
+        const got = values[n] ?? (fromEnv ? process.env[n] : undefined);
         if (got != null && got !== '') return got;
         if (def !== undefined) return def;
         missing.add(n);

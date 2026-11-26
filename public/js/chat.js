@@ -900,7 +900,7 @@ export function ChatPage({ route }) {
   useEffect(() => {
     if (!toolsOn) return setToolList([]);
     api('/api/tools').then((r) => setToolList(r.tools)).catch(() => setToolList([]));
-  }, [toolsOn, status?.settings?.mcpConfig, status?.settings?.toolFolders?.length, status?.settings?.memoryOn]);
+  }, [toolsOn, status?.settings?.mcpConfig, status?.settings?.toolFolders?.length, status?.settings?.memoryOn, status?.settings?.toolApproval]);
   useEffect(() => {
     api('/api/extensions/menu').then((r) => setSlash(r.items)).catch(() => {});
   }, []);
@@ -1063,8 +1063,13 @@ export function ChatPage({ route }) {
             args = cl.arguments ? JSON.parse(cl.arguments) : {};
           } catch {}
           // use_tool runs a connector tool the model looked up: show that tool, and ask about it.
-          const inner = cl.name === 'use_tool' ? toolList.find((x) => x.source === 'mcp' && (x.name === args.name || x.tool === args.name || `${x.server}:${x.tool}` === args.name)) : null;
+          const wanted = String(args.name ?? '').trim(); // the server trims the name too
+          const inner = cl.name === 'use_tool' ? toolList.find((x) => x.source === 'mcp' && (x.name === wanted || x.tool === wanted || `${x.server}:${x.tool}` === wanted)) : null;
           const def = inner || toolList.find((x) => x.name === cl.name);
+          // The connector tool this call would run, as far as the page can tell. The server runs a connector tool only
+          // when it is told which one the user allowed, and refuses when that is not the tool it would run.
+          const connector = inner || (def?.source === 'mcp' ? def : null);
+          const mustAsk = Boolean(def?.ask) || (cl.name === 'use_tool' && getState().status?.settings?.toolApproval !== 'auto');
           let shown = args;
           if (cl.name === 'use_tool') {
             shown = args.arguments || {};
@@ -1078,12 +1083,12 @@ export function ChatPage({ route }) {
           steps = [...steps, step];
           flush();
           let result = '';
-          if (def?.ask) announce('ask', { title: t('Hearth needs your answer'), body: t('Allow the tool “{name}”?', { name: inner ? inner.title : step.title }) });
-          if (def?.ask && !(await confirmDialog({ title: t('Allow the tool “{name}”?', { name: inner ? inner.title : cl.name === 'use_tool' ? String(args.name || cl.name) : step.title }), text: `${t('The model wants to run it with:')} ${JSON.stringify(shown).slice(0, 400)}`, ok: t('Allow'), cancel: t('Decline') }))) {
+          if (mustAsk) announce('ask', { title: t('Hearth needs your answer'), body: t('Allow the tool “{name}”?', { name: inner ? inner.title : step.title }) });
+          if (mustAsk && !(await confirmDialog({ title: t('Allow the tool “{name}”?', { name: inner ? inner.title : cl.name === 'use_tool' ? String(args.name || cl.name) : step.title }), text: `${t('The model wants to run it with:')} ${JSON.stringify(shown).slice(0, 400)}`, ok: t('Allow'), cancel: t('Decline') }))) {
             step.status = 'denied';
             result = 'The user declined this tool call.';
           } else {
-            const out = await api('/api/tools/call', { method: 'POST', body: { name: cl.name, arguments: cl.arguments || '{}' } }).catch((err) => ({ ok: false, error: err.message }));
+            const out = await api('/api/tools/call', { method: 'POST', body: { name: cl.name, arguments: cl.arguments || '{}', ...(mustAsk && connector ? { approved: connector.name } : {}) } }).catch((err) => ({ ok: false, error: err.message }));
             if (out.ok) {
               step.status = 'done';
               step.result = String(out.content).slice(0, 3000);

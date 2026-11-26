@@ -242,25 +242,60 @@ export async function findFfmpeg() {
   return found;
 }
 
+// What kind of sound file this is, by its first bytes: never by the name its sender gave it. Each kind has the
+// extension its temporary file gets and the one reader ffmpeg is told to use, so ffmpeg never picks a reader by
+// itself (a "sound file" that is really a playlist or a script would make it open other files of this computer).
+const SOUND_KINDS = {
+  ogg: { ext: '.ogg', ffmpeg: 'ogg' },
+  wav: { ext: '.wav', ffmpeg: 'wav' },
+  flac: { ext: '.flac', ffmpeg: 'flac' },
+  mp3: { ext: '.mp3', ffmpeg: 'mp3' },
+  aac: { ext: '.aac', ffmpeg: 'aac' },
+  mp4: { ext: '.m4a', ffmpeg: 'mov' },
+  webm: { ext: '.webm', ffmpeg: 'matroska' },
+  caf: { ext: '.caf', ffmpeg: 'caf' },
+  aiff: { ext: '.aiff', ffmpeg: 'aiff' },
+  amr: { ext: '.amr', ffmpeg: 'amr' },
+};
+export function soundKind(buf) {
+  if (!buf || buf.length < 12) return '';
+  const at = (i, n) => buf.toString('latin1', i, i + n);
+  if (at(0, 4) === 'OggS') return 'ogg';
+  if (at(0, 4) === 'RIFF' && at(8, 4) === 'WAVE') return 'wav';
+  if (at(0, 4) === 'fLaC') return 'flac';
+  if (at(4, 4) === 'ftyp') return 'mp4';
+  if (buf.readUInt32BE(0) === 0x1a45dfa3) return 'webm';
+  if (at(0, 4) === 'caff') return 'caf';
+  if (at(0, 4) === 'FORM' && (at(8, 4) === 'AIFF' || at(8, 4) === 'AIFC')) return 'aiff';
+  if (at(0, 5) === '#!AMR') return 'amr';
+  if (at(0, 3) === 'ID3') return 'mp3';
+  if (buf[0] === 0xff && (buf[1] & 0xf6) === 0xf0) return 'aac'; // ADTS
+  if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0 && (buf[1] & 0x06) !== 0) return 'mp3';
+  return '';
+}
+
 // buf: a sound file of any usual kind. Returns it as 16 kHz mono WAV, the form the voice engine takes.
-export async function audioToWav(buf, name = 'sound') {
+// seconds: no more sound than this is decoded (0 = no limit of its own).
+export async function audioToWav(buf, name = 'sound', { seconds = 0 } = {}) {
   if (trimWav(buf) && buf.readUInt16LE(22) === 1 && buf.readUInt32LE(24) === 16000 && buf.readUInt16LE(34) === 16) return buf;
   if (isOggOpus(buf)) {
     try {
-      return await oggOpusToWav(buf);
+      return await oggOpusToWav(buf, seconds ? { maxSeconds: seconds + 1 } : {});
     } catch (err) {
       throw Object.assign(new Error(err.message), { code: 'BAD_SOUND' });
     }
   }
+  const kind = SOUND_KINDS[soundKind(buf)];
+  if (!kind) throw Object.assign(new Error('this is not a sound file Hearth knows'), { code: 'BAD_SOUND' });
   const tool = await findFfmpeg();
-  const mac = !tool && IS_MAC && exists('/usr/bin/afconvert') && !/^OggS/.test(buf.toString('latin1', 0, 4));
+  const mac = !tool && IS_MAC && exists('/usr/bin/afconvert') && kind.ext !== '.ogg' && kind.ext !== '.webm';
   if (!tool && !mac) throw Object.assign(new Error('no way to read this sound here'), { code: 'NO_DECODER' });
-  const base = path.join(os.tmpdir(), `hearth-sound-${process.pid}-${Date.now().toString(36)}`);
-  const src = `${base}${path.extname(String(name)).replace(/[^.\w]/g, '').slice(0, 6) || '.bin'}`;
-  const out = `${base}.wav`;
+  const base = path.join(os.tmpdir(), `hearth-sound-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
+  const src = `${base}${kind.ext}`;
+  const out = `${base}.out.wav`;
   try {
-    fs.writeFileSync(src, buf);
-    if (tool) await run(tool, ['-nostdin', '-loglevel', 'error', '-y', '-i', src, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', '-f', 'wav', out], { timeout: 120e3 });
+    fs.writeFileSync(src, buf, { mode: 0o600 });
+    if (tool) await run(tool, ['-nostdin', '-loglevel', 'error', '-y', '-f', kind.ffmpeg, '-i', src, ...(seconds ? ['-t', String(seconds + 1)] : []), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', '-f', 'wav', out], { timeout: 120e3 });
     else await run('/usr/bin/afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', src, out], { timeout: 120e3 });
     if (!fs.existsSync(out) || fs.statSync(out).size < 100) throw Object.assign(new Error('the sound could not be read'), { code: 'BAD_SOUND' });
     return fs.readFileSync(out);
@@ -275,7 +310,7 @@ export async function speechOf(buf, { name = 'voice.ogg', seconds = SPEECH_SECON
   if (!(await voiceStatus()).ready) throw Object.assign(new Error(t('The voice engine is not installed yet.')), { code: 'NO_VOICE' });
   let wav;
   try {
-    wav = await audioToWav(buf, name);
+    wav = await audioToWav(buf, name, { seconds });
   } catch (err) {
     // No converter here, but the voice engine reads MP3 and FLAC by itself: hand the file over as it is.
     const kind = buf.toString('latin1', 0, 4);

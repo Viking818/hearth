@@ -127,7 +127,11 @@ if (typeof document !== 'undefined')
 function inline(src) {
   const slots = [];
   const keep = (h) => `\u0000${slots.push(h) - 1}\u0000`;
-  let s = src.replace(/`([^`\n]+)`/g, (_, c) => keep(`<code>${esc(c)}</code>`));
+  // The text of a link may hold code or math that was already set aside: it is put back here, as text between the
+  // tags. (Finished pieces are never scanned again, so nothing can travel into an attribute.)
+  const label = (text) => text.split(/(\u0000\d+\u0000)/).map((part) => (/^\u0000\d+\u0000$/.test(part) ? slots[Number(part.slice(1, -1))] ?? '' : esc(part))).join('');
+  const plain = (text) => text.replace(/\u0000\d+\u0000/g, '');
+  let s = src.replace(/\u0000/g, '').replace(/`([^`\n]+)`/g, (_, c) => keep(`<code>${esc(c)}</code>`));
   // Only $…$ with a LaTeX command counts as math, so prices like "$25 and $30" stay as they are.
   const math = (_, inner) => keep(`<span class="math">${esc(texToText(inner))}</span>`);
   s = s.replace(/\$\$(.+?)\$\$/g, math).replace(/\\\[(.+?)\\\]/g, math).replace(/\\\((.+?)\\\)/g, math);
@@ -138,7 +142,7 @@ function inline(src) {
   });
   // A link to a picture or a video file also shows it, under the link.
   s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, text, url) =>
-    /^(https?:|mailto:)/i.test(url) ? keep(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>${mediaHtml(url, text)}`) : m,
+    /^(https?:|mailto:)/i.test(url) && !url.includes('\u0000') ? keep(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label(text)}</a>${mediaHtml(url, plain(text))}`) : m,
   );
   s = s.replace(/\bhttps?:\/\/[^\s<>()"']+[^\s<>()"'.,;:!?]/g, (url) => keep(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>${mediaHtml(url)}`));
   s = esc(s);
@@ -206,7 +210,7 @@ function codeBlock(block, i) {
 }
 
 // ---- Blocks ----
-function renderBlocks(lines, blocks) {
+function renderBlocks(lines, blocks, depth = 0) {
   let out = '';
   let i = 0;
   const para = [];
@@ -247,7 +251,8 @@ function renderBlocks(lines, blocks) {
       flush();
       const q = [];
       while (i < lines.length && lines[i].trim().startsWith('>')) q.push(lines[i++].trim().replace(/^>\s?/, ''));
-      out += `<blockquote>${renderBlocks(q, blocks)}</blockquote>`;
+      // Quotes inside quotes are followed a few levels deep; thousands of ">" in a row stay plain text.
+      out += `<blockquote>${depth < 12 ? renderBlocks(q, blocks, depth + 1) : `<p>${esc(q.join(' ').replace(/^[>\s]+/, ''))}</p>`}</blockquote>`;
       continue;
     }
     if (/^\|.*\|$/.test(t) && i + 1 < lines.length && /^\|?\s*:?-{2,}/.test(lines[i + 1].trim())) {

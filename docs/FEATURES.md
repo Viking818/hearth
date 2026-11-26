@@ -128,14 +128,16 @@ Nothing big is stored next to the app, so the app folder can live on an iCloud o
 
 - Hearth listens on `127.0.0.1` only, so other computers can't reach it. **Connect apps → My network too** opens the API
   (not the app) to your Wi-Fi, and then every request needs the API key.
-- **Phones** reach the app only after scanning the QR code shown on the computer; each gets its own cookie, guessing is
-  slowed down, and only the computer itself can change who gets in, the allowed folders, connectors or plugins. The Wi-Fi
-  connection is plain HTTP, so use it on your own network.
+- **Phones** reach the app only after scanning the QR code shown on the computer. The code works once: after a phone
+  gets in, the computer shows a new one. Each phone gets its own cookie, guessing is slowed down, and only the computer
+  itself can change who gets in, the allowed folders, connectors or plugins. A phone never sees the API key or connector
+  settings. The Wi-Fi connection is plain HTTP, so use it on your own network.
 - The app itself can only be controlled from this computer (and paired phones); other websites can't send it commands,
   and the engine has a private key because llama.cpp's server accepts any website by default.
 - **Tools**: web pages are fetched only from public addresses (never this computer, the router or a NAS, even through a
   redirect); file tools read only inside the folders you allowed, after resolving links; nothing is ever written or deleted.
-  A web page can contain instructions aimed at the model, so connector tools ask first by default.
+  A web page can contain instructions aimed at the model, so connector tools ask first by default, and the server itself
+  refuses to run one that was not approved.
 - **Bots** write only inside their own work folder (checked after resolving links; 5 MB a file, downloads up to 50 MB).
   A bot uses only the tools switched on for it, and connectors without asking once you switch them on for it. Its files
   are downloaded, never shown inside the app, and **Open** only opens documents, never programs. The Telegram token

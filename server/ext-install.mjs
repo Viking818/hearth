@@ -8,11 +8,14 @@ import { DIRS } from './settings.mjs';
 import { uid } from './util.mjs';
 import { t } from './i18n.mjs';
 import { extract } from './engine-install.mjs';
-import { SKILLS_DIR, PLUGINS_DIR, readState, writeState, forget, slug, parseFrontmatter, inside, readJsonSafe, describePluginDir, connectorWhat, connectorNeeds } from './extensions.mjs';
+import { SKILLS_DIR, PLUGINS_DIR, readState, writeState, forget, slug, parseFrontmatter, inside, readJsonSafe, describePluginDir, connectorWhat, connectorNeeds, pluginMcp } from './extensions.mjs';
 
 const MAX_DOWNLOAD = 150 << 20;
 const MAX_FILES = 4000;
 const MAX_BYTES = 200 << 20;
+// What may be unpacked for a preview: room for a collection of many plugins, far below "fills the disk".
+const MAX_UNPACKED_FILES = 20000;
+const MAX_UNPACKED_BYTES = 400 << 20;
 const pending = new Map(); // token → { tmp, root, source, found, at }
 
 const fail = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -59,14 +62,88 @@ async function download(url, file) {
 
 const isRoot = (d) => ['SKILL.md', '.claude-plugin', '.mcp.json'].some((n) => fs.existsSync(path.join(d, n)));
 
+// What a zip file says it holds, read from its list of contents without unpacking anything: how many entries, how
+// big they are unpacked, and whether any of them is a link or has a name that points out of its folder.
+// Returns null when the file is not a zip Hearth can read this way.
+export function zipSummary(file) {
+  const size = fs.statSync(file).size;
+  const fd = fs.openSync(file, 'r');
+  try {
+    const head = Buffer.alloc(4);
+    fs.readSync(fd, head, 0, 4, 0);
+    if (head.readUInt32LE(0) !== 0x04034b50) return null; // "PK\x03\x04"
+    const tailLen = Math.min(size, 66000);
+    const tail = Buffer.alloc(tailLen);
+    fs.readSync(fd, tail, 0, tailLen, size - tailLen);
+    let end = -1;
+    for (let i = tailLen - 22; i >= 0; i--) if (tail.readUInt32LE(i) === 0x06054b50) { end = i; break; }
+    if (end < 0) return null;
+    const entries = tail.readUInt16LE(end + 10);
+    const cdSize = tail.readUInt32LE(end + 12);
+    const cdAt = tail.readUInt32LE(end + 16);
+    if (entries === 0xffff || cdSize === 0xffffffff || cdAt === 0xffffffff || cdAt + cdSize > size || cdSize > 64 << 20) return { entries: Infinity, bytes: Infinity, bad: '' }; // a zip64 archive: far too big for a skill
+    const cd = Buffer.alloc(cdSize);
+    fs.readSync(fd, cd, 0, cdSize, cdAt);
+    let at = 0;
+    let bytes = 0;
+    let count = 0;
+    let bad = '';
+    while (at + 46 <= cd.length && cd.readUInt32LE(at) === 0x02014b50) {
+      const usize = cd.readUInt32LE(at + 24);
+      const nameLen = cd.readUInt16LE(at + 28);
+      const mode = (cd.readUInt32LE(at + 38) >>> 16) & 0xf000; // the Unix file type, when the archive was made on one
+      const name = cd.toString('utf8', at + 46, at + 46 + nameLen);
+      bytes += usize === 0xffffffff ? Infinity : usize;
+      count++;
+      if (!bad && (mode === 0xa000 || (mode && mode !== 0x8000 && mode !== 0x4000))) bad = name; // a link, a device, a pipe
+      if (!bad && (/^[\\/]/.test(name) || /^[A-Za-z]:/.test(name) || name.includes('\\') || name.split('/').includes('..'))) bad = name;
+      at += 46 + nameLen + cd.readUInt16LE(at + 30) + cd.readUInt16LE(at + 32);
+    }
+    return { entries: count, bytes, bad };
+  } catch {
+    return null;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+// After unpacking: nothing but ordinary files and folders may be left, and not more of them than a skill or plugin
+// can be. Links, devices and pipes are removed (reading "through" one would reach other files of this computer, or
+// never end), and the limits are counted on what is really on the disk.
+export function tidyUnpacked(dir) {
+  let files = 0;
+  let bytes = 0;
+  const walk = (d, depth) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      const st = fs.lstatSync(p);
+      if (st.isDirectory() && depth < 40) walk(p, depth + 1);
+      else if (st.isFile() && st.nlink <= 1) {
+        files++;
+        bytes += st.size;
+        if (files > MAX_UNPACKED_FILES || bytes > MAX_UNPACKED_BYTES) throw fail(t('This is too big to be a skill or a plugin.'), 413);
+      } else fs.rmSync(p, { recursive: true, force: true });
+    }
+  };
+  walk(dir, 0);
+  return { files, bytes };
+}
+
 // Unpack, then step into the one folder most archives wrap everything in (GitHub always does).
 async function unpack(archive, dest, levels) {
+  // Only real zip files, checked before anything is written: the system's `tar` would also open other kinds of
+  // archive under a .zip name, and it unpacks whatever size the archive holds.
+  const z = zipSummary(archive);
+  if (!z) throw fail(t('Could not open this file. Use a .zip file.'), 422);
+  if (z.bad) throw fail(t('This archive holds a link or a file name that points outside of it ({name}). Hearth does not open such archives.', { name: z.bad.slice(0, 80) }), 422);
+  if (z.entries > MAX_UNPACKED_FILES || z.bytes > MAX_UNPACKED_BYTES) throw fail(t('This is too big to be a skill or a plugin.'), 413);
   fs.mkdirSync(dest, { recursive: true });
   try {
     await extract(archive, dest);
   } catch {
     throw fail(t('Could not open this file. Use a .zip file.'), 422);
   }
+  tidyUnpacked(dest);
   let root = dest;
   for (let i = 0; i < levels; i++) {
     if (isRoot(root)) break;
@@ -188,6 +265,24 @@ function cleanupPending() {
     fs.rmSync(p.tmp, { recursive: true, force: true });
     pending.delete(k);
   }
+  sweepPreviews();
+}
+
+// Preview folders nobody holds any more (the preview was closed, or Hearth was restarted) are removed.
+export function sweepPreviews() {
+  const held = new Set([...pending.values()].map((p) => path.basename(p.tmp)));
+  try {
+    for (const name of fs.readdirSync(DIRS.cache)) if (/^ext-[\w-]+$/.test(name) && !held.has(name)) fs.rmSync(path.join(DIRS.cache, name), { recursive: true, force: true });
+  } catch {}
+}
+
+// The user closed a preview without installing: its files go at once.
+export function dropPreview(token) {
+  const p = pending.get(String(token || ''));
+  if (!p) return false;
+  pending.delete(String(token));
+  fs.rmSync(p.tmp, { recursive: true, force: true });
+  return true;
 }
 
 export async function inspect({ url, folder, upload, name }) {
@@ -276,6 +371,10 @@ function installPlugin(dir, source, entry) {
   const id = slug(entry?.name || manifest.name || path.basename(dir)) || `plugin-${uid(4)}`;
   const stage = path.join(PLUGINS_DIR, `.${id}-${uid(4)}`);
   const budget = { files: 0, bytes: 0 };
+  // The connectors of the plugin that is installed under this name now (if any), to compare after the replacement.
+  const before = {};
+  const oldDir = path.join(PLUGINS_DIR, id);
+  if (fs.existsSync(oldDir)) for (const [name, cfg] of Object.entries(pluginMcp(oldDir, readJsonSafe(path.join(oldDir, '.claude-plugin', 'plugin.json')) || {}))) before[name] = JSON.stringify(cfg);
   try {
     const own = entry && (['skills', 'commands', 'agents'].some((k) => listOf(entry[k]).length) || entry.mcpServers);
     if (own) {
@@ -297,7 +396,15 @@ function installPlugin(dir, source, entry) {
     throw err;
   }
   const st = readState();
-  st.plugins[id] = { ...(st.plugins[id] || {}), source, enabled: true, at: Date.now() };
+  const old = st.plugins[id] || {};
+  // What the user allowed and typed belongs to the plugin it was given to. A package from another source that
+  // merely has the same name gets none of it; an update from the same source keeps the typed values, and keeps a
+  // connector switched on only if that connector is unchanged.
+  const sameSource = Boolean(old.source) && old.source === source;
+  const after = pluginMcp(path.join(PLUGINS_DIR, id), readJsonSafe(path.join(PLUGINS_DIR, id, '.claude-plugin', 'plugin.json')) || {});
+  const connectors = {};
+  if (sameSource) for (const [name, on] of Object.entries(old.connectors || {})) if (on && before[name] !== undefined && before[name] === JSON.stringify(after[name])) connectors[name] = true;
+  st.plugins[id] = { ...old, source, enabled: true, at: Date.now(), connectors, values: sameSource ? old.values || {} : {} };
   writeState(st);
   return id;
 }
@@ -333,3 +440,6 @@ export async function install(token, { pick } = {}) {
     fs.rmSync(p.tmp, { recursive: true, force: true });
   }
 }
+
+// Previews left over from an earlier run (Hearth was closed while one was open) are removed at the start.
+sweepPreviews();

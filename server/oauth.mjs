@@ -12,7 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { DIRS, APP_NAME } from './settings.mjs';
-import { readJson, uid, isLoopback, IS_MAC, IS_WIN } from './util.mjs';
+import { readJson, uid, isLoopback, IS_MAC, IS_WIN, openCommand } from './util.mjs';
 import { t, getLang, inLang, defaultLang } from './i18n.mjs';
 
 export const OAUTH_DIR = path.join(DIRS.data, 'oauth');
@@ -504,12 +504,10 @@ export async function signOut(key) {
 // The service's sign-in page opens in the user's own browser, where they may already be signed in to it.
 export function openInBrowser(url) {
   try {
-    const opts = { detached: true, stdio: 'ignore' };
-    const child = IS_MAC
-      ? spawn('open', [url], opts)
-      : IS_WIN
-        ? spawn('cmd', ['/c', 'start', '""', `"${url}"`], { ...opts, windowsHide: true, windowsVerbatimArguments: true }) // quoted: & in the address
-        : spawn('xdg-open', [url], opts);
+    const u = new URL(url); // only a web address is ever handed to the system
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    const [cmd, args] = openCommand(u.href);
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
     child.on('error', () => {});
     child.unref();
   } catch {}

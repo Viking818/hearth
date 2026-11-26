@@ -98,19 +98,19 @@ function ToolsSection({ s, save, isLocal }) {
         <${Toggle} on=${s.toolsOn} onChange=${(v) => save({ toolsOn: v })} />
       <//>
       <${Row} title=${t('Open pages that need scripts')} text=${t('Many pages show nothing until their scripts have run. For those, Hearth asks a browser of this computer (Edge, Chrome or Brave) to open the page without a window, with an empty profile: no sign-ins, cookies or history of yours. Only public web addresses are let through.')}>
-        <${Toggle} on=${s.renderPages !== false} onChange=${(v) => save({ renderPages: v })} />
+        <${Toggle} on=${s.renderPages !== false} disabled=${!isLocal} onChange=${(v) => save({ renderPages: v })} />
       <//>
       <${Row} title=${t('Web search')} text=${t('Without a key Hearth asks DuckDuckGo, then Brave, then Bing, slowly and one question at a time. These sites sometimes refuse a program; then the answer says that the search was limited. A free search key is steadier.')}>
-        <select class="select" value=${s.searchProvider} onChange=${(e) => save({ searchProvider: e.target.value })}>${providers.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>
+        <select class="select" disabled=${!isLocal} title=${isLocal ? '' : t('Change this on the computer itself.')} value=${s.searchProvider} onChange=${(e) => save({ searchProvider: e.target.value })}>${providers.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>
       <//>
-      ${(s.searchProvider === 'brave' || s.searchProvider === 'tavily') && html`<${Block} title=${t('Search key')} text=${s.searchProvider === 'brave' ? t('Get a free key at api-dashboard.search.brave.com.') : t('Get a free key at app.tavily.com.')}>
+      ${isLocal && (s.searchProvider === 'brave' || s.searchProvider === 'tavily') && html`<${Block} title=${t('Search key')} text=${s.searchProvider === 'brave' ? t('Get a free key at api-dashboard.search.brave.com.') : t('Get a free key at app.tavily.com.')}>
         <form class="row" onSubmit=${(e) => { e.preventDefault(); save({ searchKey: key.trim() }); setKey(''); }}>
           <input class="input" type="password" placeholder=${s.searchKey ? `•••••••• (${t('saved')})` : t('Paste the key')} value=${key} onInput=${(e) => setKey(e.target.value)} />
           <button class="btn">${t('Save')}</button>
           ${s.searchKey && html`<button type="button" class="btn danger" onClick=${() => save({ searchKey: '' })}>${t('Remove')}</button>`}
         </form>
       <//>`}
-      ${s.searchProvider === 'searxng' && html`<${Block} title=${t('SearXNG address')} text=${t('For example a SearXNG running on your NAS. Its JSON output must be turned on.')}>
+      ${isLocal && s.searchProvider === 'searxng' && html`<${Block} title=${t('SearXNG address')} text=${t('For example a SearXNG running on your NAS. Its JSON output must be turned on.')}>
         <div class="row"><input class="input" placeholder="http://192.168.1.20:8080" value=${url ?? s.searchUrl} onInput=${(e) => setUrl(e.target.value)} /><button class="btn" onClick=${() => url != null && save({ searchUrl: url.trim() })}>${t('Save')}</button></div>
       <//>`}
       <${Block} title=${t('Folders the model may read')} text=${t('Only these folders and what is inside them. Hearth never lets the model change or delete files.')}>
@@ -269,7 +269,11 @@ function PhoneSection({ isLocal }) {
   const [info, setInfo] = useState(null);
   const load = () => api('/api/phone').then(setInfo).catch(() => {});
   useEffect(() => {
-    if (isLocal) load();
+    if (!isLocal) return undefined;
+    load();
+    // The code is used up when a device pairs: keep the one on screen fresh, and the list of devices too.
+    const timer = setInterval(load, 4000);
+    return () => clearInterval(timer);
   }, []);
   if (!isLocal) return null;
   const toggle = async (on) => {
@@ -476,7 +480,7 @@ export function SettingsPage({ route }) {
           </form>
         <//>
         <${Block} title=${t('Hugging Face token')} text=${`${t('Only needed for models that require a login.')} ${s.hfToken ? t('A token is saved.') : ''}`}>
-          <form class="row" onSubmit=${(e) => { e.preventDefault(); save({ hfToken: token.trim() }); setToken(''); }}>
+          <form class="row" onSubmit=${(e) => { e.preventDefault(); if (!isLocal) return toast(t('Change this on the computer itself.'), 'bad'); save({ hfToken: token.trim() }); setToken(''); }}>
             <input class="input" type="password" placeholder=${s.hfToken ? `•••••••• (${t('saved')})` : 'hf_…'} value=${token} onInput=${(e) => setToken(e.target.value)} />
             <button class="btn">${t('Save')}</button>
             ${s.hfToken && html`<button type="button" class="btn danger" onClick=${() => save({ hfToken: '' })}>${t('Remove')}</button>`}

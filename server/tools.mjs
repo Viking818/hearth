@@ -3,6 +3,7 @@
 // Connectors can bring many tools with long instructions (Notion: 77 tools, about 78,000 tokens), and a local model
 // reads all of them before every answer. Past a limit, the chat gets their names only, plus find_tool (a tool's
 // instructions and arguments, when needed) and use_tool (runs it), the same way it handles a long list of skills.
+import { isNetworkPath } from './util.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getSettings } from './settings.mjs';
@@ -270,6 +271,7 @@ export function allowedRoots() {
 
 function insideAllowed(p) {
   if (!p) throw new Error(t('Give a path.'));
+  if (isNetworkPath(p)) throw new Error(t('That path is outside the folders you allowed in Settings → Tools.')); // before the system is asked about it
   const rs = allowedRoots();
   let target;
   try {
@@ -360,7 +362,16 @@ export async function readResolved(file, offset = 0, tool = 'read_file') {
 // ---- One call ----
 
 // anyway: a bot's own tool switches apply instead of the chat's Tools switch in Settings.
-export async function callTool(name, args = {}, { anyway = false } = {}) {
+// With "ask before a connector's tool runs" on, a connector tool runs for the chat only when the page says which
+// tool the user allowed, and that is the very tool about to run. The page asks; the server holds it to the answer:
+// a call the page did not recognise, or matched to another tool, is refused here instead of running unasked.
+// (Bots pass `anyway`: they work unattended by design and never ask.)
+function needsApproval(m, approved, anyway) {
+  if (anyway || getSettings().toolApproval === 'auto') return;
+  if (String(approved || '') !== m.name) throw new Error(t('The tool “{name}” was not run: it needs your approval first.', { name: m.title || m.name }));
+}
+
+export async function callTool(name, args = {}, { anyway = false, approved = '' } = {}) {
   const s = getSettings();
   if (!s.toolsOn && !anyway) throw new Error(t('Tools are turned off in Settings.'));
   const a = args && typeof args === 'object' ? args : {};
@@ -391,6 +402,7 @@ export async function callTool(name, args = {}, { anyway = false } = {}) {
       return findConnectorTools(a.query);
     case 'use_tool': {
       const m = connectorTool(a.name);
+      needsApproval(m, approved, anyway);
       let args2 = a.arguments ?? {};
       if (typeof args2 === 'string') {
         try {
@@ -417,6 +429,7 @@ export async function callTool(name, args = {}, { anyway = false } = {}) {
     default: {
       const m = mcpTools().find((x) => x.name === name);
       if (!m) throw new Error(t('Unknown tool: {name}', { name }));
+      needsApproval(m, approved, anyway);
       const r = await callMcp(m.server, m.tool, a);
       if (r.isError) throw new Error(r.text || t('The tool reported an error.'));
       return r.text.slice(0, MAX_RESULT * 2) || t('(the tool returned nothing)');

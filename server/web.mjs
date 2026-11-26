@@ -5,6 +5,7 @@ import http from 'node:http';
 import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
+import os from 'node:os';
 import zlib from 'node:zlib';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -53,11 +54,51 @@ export function isPrivateIp(ip) {
   return (x[0] & 0xfe) === 0xfc || (x[0] === 0xfe && (x[1] & 0x80) === 0x80) || x[0] === 0xff; // fc00::/7, fe80::/10 and fec0::/10, ff00::/8
 }
 
+// An address of this computer itself, or of the network it is plugged into, that lies outside the private ranges:
+// with IPv6 a home computer, its router and its NAS usually all have "public" addresses that only the router's
+// firewall hides from the internet, and some computers have a public IPv4 address on their own adapter. A range
+// check alone would call those public. So every address is also compared with this computer's own addresses and the
+// networks they belong to.
+let nets = { at: 0, list: [] };
+function ownNetworks(ifaces) {
+  if (!ifaces && Date.now() - nets.at < 15000) return nets.list;
+  const list = [];
+  for (const group of Object.values(ifaces || os.networkInterfaces())) {
+    for (const a of group || []) {
+      const v4 = a.family === 'IPv4' || a.family === 4;
+      const bytes = v4 ? String(a.address).split('.').map(Number) : v6Bytes(a.address);
+      if (!bytes || bytes.length !== (v4 ? 4 : 16) || bytes.some((x) => !Number.isInteger(x))) continue;
+      let bits = Number(String(a.cidr || '').split('/')[1]);
+      // A missing or absurdly wide mask (a tunnel that claims everything) counts as this one address only.
+      if (!Number.isInteger(bits) || bits < (v4 ? 8 : 32)) bits = v4 ? 32 : 128;
+      list.push({ v4, bytes, bits });
+    }
+  }
+  if (!ifaces) nets = { at: Date.now(), list };
+  return list;
+}
+export function onOwnNetwork(ip, ifaces) {
+  let v4 = net.isIP(ip) === 4;
+  let bytes = v4 ? ip.split('.').map(Number) : v6Bytes(ip);
+  if (!bytes) return false;
+  if (!v4 && bytes.slice(0, 10).every((x) => x === 0) && bytes[10] === 255 && bytes[11] === 255) {
+    v4 = true; // ::ffff:a.b.c.d
+    bytes = bytes.slice(12);
+  }
+  return ownNetworks(ifaces).some((n) => {
+    if (n.v4 !== v4) return false;
+    for (let i = 0; i < n.bits; i++) if (((bytes[i >> 3] >> (7 - (i & 7))) & 1) !== ((n.bytes[i >> 3] >> (7 - (i & 7))) & 1)) return false;
+    return true;
+  });
+}
+// Not a place on the public internet: a private or special range, this computer, or its own network.
+export const isLocalAddress = (ip, ifaces) => isPrivateIp(ip) || onOwnNetwork(ip, ifaces);
+
 // Checked when the connection is made (not just before), so a DNS answer can't change in between.
 export function publicLookup(hostname, opts, cb) {
   dns.lookup(hostname, { ...opts, all: true }, (err, list) => {
     if (err) return cb(err);
-    const ok = list.filter((a) => !isPrivateIp(a.address));
+    const ok = list.filter((a) => !isLocalAddress(a.address));
     if (!ok.length || ok.length !== list.length) return cb(Object.assign(new Error(t('Hearth only opens public web addresses.')), { code: 'EPRIVATE' }));
     if (opts.all) return cb(null, ok);
     cb(null, ok[0].address, ok[0].family);
@@ -68,7 +109,7 @@ function getOnce(url, { headers = {}, method = 'GET', body, maxBytes, timeout })
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return reject(new Error(t('Only http and https links can be opened.')));
-    if (net.isIP(u.hostname.replace(/^\[|\]$/g, '')) && isPrivateIp(u.hostname.replace(/^\[|\]$/g, ''))) return reject(new Error(t('Hearth only opens public web addresses.')));
+    if (net.isIP(u.hostname.replace(/^\[|\]$/g, '')) && isLocalAddress(u.hostname.replace(/^\[|\]$/g, ''))) return reject(new Error(t('Hearth only opens public web addresses.')));
     const lib = u.protocol === 'https:' ? https : http;
     const req = lib.request(u, { method, lookup: publicLookup, headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/json,application/pdf;q=0.9,*/*;q=0.8', 'accept-encoding': 'gzip, deflate, br', 'accept-language': 'en,ru;q=0.8,*;q=0.5', ...headers }, timeout }, (res) => {
       const enc = String(res.headers['content-encoding'] || '');
@@ -135,14 +176,62 @@ export function decodeEntities(s) {
   });
 }
 
+// Cutting pieces out of a page with indexOf, not with patterns like <!--[\s\S]*?-->: on a page made of thousands of
+// openers that are never closed, such a pattern scans to the end of the page once for every opener, and a 4 MB page
+// would stall the whole program for minutes. These helpers look for each closer once.
+function stripBetween(s, open, close) {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const a = s.indexOf(open, at);
+    if (a < 0) return out + s.slice(at);
+    out += `${s.slice(at, a)} `;
+    const b = s.indexOf(close, a + open.length);
+    if (b < 0) return out; // never closed: the rest is not text
+    at = b + close.length;
+  }
+}
+// Removes whole elements (<script>…</script> and the like). An element that is never closed stays, as before.
+function stripElements(s, names) {
+  const lower = s.toLowerCase();
+  const re = new RegExp(`<(${names})\\b`, 'gi');
+  const open = new Set(); // names with no closer further on: no need to look again
+  let out = '';
+  let at = 0;
+  let m;
+  while ((m = re.exec(s))) {
+    const name = m[1].toLowerCase();
+    if (m.index < at || open.has(name)) continue;
+    const b = lower.indexOf(`</${name}>`, m.index);
+    if (b < 0) {
+      open.add(name);
+      continue;
+    }
+    out += `${s.slice(at, m.index)} `;
+    at = b + name.length + 3;
+    re.lastIndex = at;
+  }
+  return out + s.slice(at);
+}
+function firstElement(s, name) {
+  const lower = s.toLowerCase();
+  const a = lower.search(new RegExp(`<${name}\\b`));
+  if (a < 0) return '';
+  const b = lower.indexOf(`</${name}>`, a);
+  return b < 0 ? '' : s.slice(a, b + name.length + 3);
+}
+
 // Readable text from HTML: the main part when the page marks one, headings as "#", lists as "-".
 export function htmlToText(html) {
-  let s = html.replace(/<!--[\s\S]*?-->/g, ' ');
-  const title = decodeEntities((/<title[^>]*>([\s\S]*?)<\/title>/i.exec(s)?.[1] || '').replace(/\s+/g, ' ').trim());
-  s = s.replace(/<(script|style|noscript|svg|template|iframe|canvas|form|select|button)\b[\s\S]*?<\/\1>/gi, ' ');
-  const main = /<main\b[\s\S]*?<\/main>/i.exec(s)?.[0] || /<article\b[\s\S]*?<\/article>/i.exec(s)?.[0];
+  let s = stripBetween(String(html || '').slice(0, 6 << 20), '<!--', '-->');
+  // After the last ">" nothing can be a tag any more: a "<" there is plain text (and must not start a long search).
+  const lastTag = s.lastIndexOf('>');
+  s = s.slice(0, lastTag + 1) + s.slice(lastTag + 1).replace(/</g, ' ');
+  const title = decodeEntities((/<title[^>]*>([^<]{0,2000})/i.exec(s)?.[1] || '').replace(/\s+/g, ' ').trim());
+  s = stripElements(s, 'script|style|noscript|svg|template|iframe|canvas|form|select|button');
+  const main = firstElement(s, 'main') || firstElement(s, 'article');
   if (main && main.length > 500) s = main;
-  else s = s.replace(/<(nav|footer|header|aside)\b[\s\S]*?<\/\1>/gi, ' ');
+  else s = stripElements(s, 'nav|footer|header|aside');
   s = s
     .replace(/<h([1-6])[^>]*>/gi, (m, l) => `\n\n${'#'.repeat(Math.min(Number(l), 4))} `)
     .replace(/<\/h[1-6]>/gi, '\n\n')

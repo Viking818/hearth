@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { readJson, writeJson, uid, keepPrivate } from './util.mjs';
 
 export const APP_NAME = 'Hearth';
-export const APP_VERSION = '0.2.32';
+export const APP_VERSION = '0.2.33';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // Big files (models, engines) must never land in an iCloud/OneDrive-synced folder like the Desktop,
@@ -162,7 +162,19 @@ export function newApiKey() {
 }
 
 // What the browser may see (tokens and keys for other services stay on the server).
-export function publicSettings() {
+// local: the caller is the computer's own page. A paired phone or tablet (local: false) also gets no API key and
+// no connector settings: the key would outlive its pairing, and connector settings hold other services' keys.
+export function publicSettings({ local = true } = {}) {
   const { hfToken, searchKey, phoneToken, ...rest } = current;
-  return { ...rest, hfToken: hfToken ? 'set' : '', searchKey: searchKey ? 'set' : '', defaultModelsDir: DIRS.models, dataDir: DATA };
+  const out = { ...rest, hfToken: hfToken ? 'set' : '', searchKey: searchKey ? 'set' : '', defaultModelsDir: DIRS.models, dataDir: DATA };
+  if (!local) {
+    out.apiKey = '';
+    out.mcpConfig = '';
+  }
+  return out;
 }
+
+// The everyday settings a paired phone or tablet may change. Everything else is the computer's own business: who can
+// reach it, which folders and programs it uses, and where it sends its own requests (the search address and keys).
+// A setting added later is computer-only until it is listed here.
+export const PHONE_MAY_SET = new Set(['theme', 'language', 'contextSize', 'parallel', 'vision', 'speculative', 'multiModel', 'autoLoad', 'checkUpdates', 'chatThinking', 'apiThinking', 'memoryOn', 'toolsOn', 'systemPrompt', 'ttsVoice', 'naturalVoice', 'naturalVoiceStyle', 'lastModel']);

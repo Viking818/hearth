@@ -201,3 +201,13 @@ export async function repoChoices(repo, hw) {
     choices: quants.map(({ layout, fileSizes, ...q }) => ({ ...q, fit: fitFor(hw, q.size, { ctx, moe, mmproj: mmproj?.size || 0, layout }) })),
   };
 }
+
+// Where a file of a model repository goes: inside the model's own folder, whatever the listing calls the file.
+// A name with a backslash, a drive letter or a ".." part is refused (on Windows a backslash is a separator too).
+export function modelFileDest(root, file, join = path.join, sep = path.sep) {
+  const parts = String(file || '').split('/');
+  if (!parts.length || parts.some((x) => !x || x === '.' || x === '..' || /[\\:\0]/.test(x))) throw Object.assign(new Error(t('This model has a file with a name Hearth does not accept: {name}', { name: String(file).slice(0, 120) })), { status: 400 });
+  const dest = join(root, ...parts);
+  if (!dest.startsWith(root + sep)) throw Object.assign(new Error(t('This model has a file with a name Hearth does not accept: {name}', { name: String(file).slice(0, 120) })), { status: 400 });
+  return dest;
+}

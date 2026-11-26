@@ -50,18 +50,26 @@ const shown = (code, images) => code.replace(/\{\{\s*image:(\d+)\s*\}\}/g, (m, n
 
 // Turning a design into a PNG: html2canvas draws it inside a hidden frame. html2canvas copies the page into a frame of
 // its own and must reach it, which a frame with no origin can't, so this one frame keeps Hearth's origin. To keep
-// that safe, the design is cleaned first (no scripts, frames, plug-ins or event handlers), and a security policy in it
-// lets only the two scripts below run (each carries a one-time key, a nonce).
+// that safe:
+//  - the design is read into a tree with scripting off and cleaned there: no scripts, frames, plug-ins, event
+//    handlers, and none of the elements a browser reads differently the second time (noscript, template);
+//  - the cleaned tree is never turned back into text and read again. Its nodes are moved, as nodes, into a frame
+//    that Hearth wrote itself. (Until 0.2.33 the tree was written out as text and parsed again by the frame; what a
+//    browser makes of such text can differ from the tree that was checked.)
+//  - that frame's own page carries a security policy that lets only Hearth's two scripts run (each has a one-time
+//    key, a nonce), and it is in place before any node of the design arrives.
 export function cleanDesign(doc) {
   const d = new DOMParser().parseFromString(doc, 'text/html');
-  d.querySelectorAll('script, iframe, frame, frameset, object, embed, applet, portal, meta[http-equiv], base, form, link[rel]:not([rel~="stylesheet"])').forEach((n) => n.remove());
+  d.querySelectorAll('script, iframe, frame, frameset, object, embed, applet, portal, noscript, template, meta[http-equiv], base, form, link[rel]:not([rel~="stylesheet"])').forEach((n) => n.remove());
+  // An SVG animation can write a "javascript:" address into a link after the check: those go too.
+  d.querySelectorAll('set, animate, animateTransform, animateMotion').forEach((n) => /href/i.test(n.getAttribute('attributeName') || '') && n.remove());
   for (const el of d.querySelectorAll('*'))
     for (const at of [...el.attributes]) {
       const n = at.name.toLowerCase();
       // Browsers skip tabs, line breaks and leading control characters in an address: "java<tab>script:" still runs.
       if (n.startsWith('on') || n === 'srcdoc' || /^(javascript|vbscript):/i.test(at.value.replace(/[\u0000-\u0020]/g, ''))) el.removeAttribute(at.name);
     }
-  return `<!doctype html>\n${d.documentElement.outerHTML}`;
+  return d;
 }
 
 let painter = null;
@@ -87,14 +95,21 @@ async function exportPng(id, a) {
   const fmt = a.format;
   const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
   const policy = `<meta http-equiv="Content-Security-Policy" content="script-src 'nonce-${nonce}'; object-src 'none'; base-uri 'none'; form-action 'none'">`;
-  const clean = cleanDesign(doc).replace(/<head(\s[^>]*)?>/i, (m) => `${m}${policy}`);
+  const design = cleanDesign(doc);
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
   frame.style.cssText = `position:fixed;left:-${fmt.w + 200}px;top:0;width:${fmt.w}px;height:${fmt.h}px;border:0;opacity:0;pointer-events:none`;
-  frame.srcdoc = clean.replace(/<\/body>/i, () => `${EXPORTER(lib, nonce)}</body>`);
+  // The frame's page is Hearth's own text: the policy and the two scripts, nothing of the design.
+  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8">${policy}</head><body>${EXPORTER(lib, nonce)}</body></html>`;
   document.body.appendChild(frame);
   try {
     await new Promise((resolve) => (frame.onload = resolve));
+    // Now the design's cleaned nodes move in, as nodes: its styles after the policy, its content before the scripts.
+    const fd = frame.contentDocument;
+    for (const [from, to] of [[design.documentElement, fd.documentElement], [design.body, fd.body]]) for (const at of [...from.attributes]) to.setAttribute(at.name, at.value);
+    for (const n of [...design.head.childNodes]) fd.head.appendChild(fd.adoptNode(n));
+    const scripts = fd.body.firstChild;
+    for (const n of [...design.body.childNodes]) fd.body.insertBefore(fd.adoptNode(n), scripts);
     const url = await new Promise((resolve, reject) => {
       const tm = setTimeout(() => reject(new Error(t('Saving the picture took too long.'))), 120000);
       const on = (e) => {

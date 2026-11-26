@@ -74,7 +74,10 @@ export function wav16(pcm, rate = RATE) {
 }
 
 // buf: an Ogg Opus recording (a Telegram voice message). Returns it as 16 kHz mono WAV.
-export async function oggOpusToWav(buf) {
+// maxSeconds: no more than this much sound is decoded, however long the file says or is. The length a sender
+// declares proves nothing, and a packet of one byte stands for up to 60 ms of sound, so a small file can hold hours:
+// decoding stops at the limit, and the rest of Hearth gets its turn every few hundred packets.
+export async function oggOpusToWav(buf, { maxSeconds = 3600 } = {}) {
   const packets = oggPackets(buf);
   const head = opusHead(packets[0]);
   const frames = packets.slice(2).filter((p) => p.length); // after "OpusHead" and "OpusTags"
@@ -83,7 +86,11 @@ export async function oggOpusToWav(buf) {
   try {
     const parts = [];
     let total = 0;
+    const limit = Math.max(1, Math.ceil(maxSeconds * RATE) + Math.round((head.preSkip * RATE) / 48000));
+    let count = 0;
     for (const p of frames) {
+      if (total >= limit) break;
+      if (++count % 400 === 0) await new Promise((r) => setImmediate(r));
       const pcm = dec.decode(p); // 16-bit samples, left and right in turn when there are two channels
       const n = pcm.length / 2 / head.channels;
       const mono = new Int16Array(n);

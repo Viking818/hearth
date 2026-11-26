@@ -126,7 +126,7 @@ test('a service that wants a sign-in: registration, the browser round trip with 
     // Its tools work in the chat.
     const tool = (await listTools()).tools.find((x) => x.name === 'notes__list_notes');
     assert.ok(tool && tool.ask, 'asks before running, like every connector tool');
-    assert.equal(await callTool(tool.name, {}), 'Note 1: order blue ink');
+    assert.equal(await callTool(tool.name, {}, { approved: tool.name }), 'Note 1: order blue ink');
 
     // The tokens stay on the server: one file in the data folder, readable only by this user, never sent to the page.
     assert.equal(fs.readdirSync(oauth.OAUTH_DIR).length, 1);

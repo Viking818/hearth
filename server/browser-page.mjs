@@ -12,7 +12,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { IS_WIN, IS_MAC, exists, run } from './util.mjs';
-import { isPrivateIp, publicLookup } from './web.mjs';
+import { isLocalAddress, publicLookup } from './web.mjs';
 
 let found = null; // { at, path }
 // A Chromium-family browser on this computer: '' when there is none.
@@ -39,7 +39,7 @@ export async function findBrowser() {
 // A proxy on this computer for the browser alone. allowLocal is for the tests, whose pages live on this computer.
 export function startGate({ allowLocal = false } = {}) {
   const lookup = allowLocal ? undefined : publicLookup;
-  const allowed = (host) => allowLocal || !(net.isIP(host) && isPrivateIp(host));
+  const allowed = (host) => allowLocal || !(net.isIP(host) && isLocalAddress(host));
   const server = http.createServer((req, res) => {
     // A plain http page: the browser sends the whole address.
     let u;
@@ -257,7 +257,8 @@ async function drive(bin, base, profile, url, deadline) {
       last = n;
       await sleep(400);
     }
-    const shown = await send('Runtime.evaluate', { expression: 'document.documentElement ? document.documentElement.outerHTML : ""', returnByValue: true }, sessionId);
+    // No more of the page than Hearth's own reader would take: a page that keeps growing cannot hand over gigabytes.
+    const shown = await send('Runtime.evaluate', { expression: 'document.documentElement ? document.documentElement.outerHTML.slice(0, 4194304) : ""', returnByValue: true }, sessionId);
     send('Browser.close').catch(() => {});
     return { html: String(shown.result?.value || '') };
   } catch (err) {

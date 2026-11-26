@@ -1798,4 +1798,12 @@ export default {
   'This page shows almost nothing to a visitor who is not signed in (or it could not be opened fully). Do not guess what it holds: tell the user, and ask for the file or the text if you need it.': 'Эта страница почти ничего не показывает тому, кто не вошёл в аккаунт (или её не удалось открыть целиком). Не угадывай, что на ней: скажи об этом пользователю и попроси файл или текст, если они нужны.',
   'Give the text of the document.': 'Дайте текст документа.',
   'The document is too long.': 'Документ слишком длинный.',
+  // 0.2.33: fixes after the security review
+  'The API key is shown on the computer itself.': 'Ключ API показывается только на самом компьютере.',
+  'Send the picture itself (a data: address), not a link to it.': 'Пришлите саму картинку (адрес data:), а не ссылку на неё.',
+  'This is too big to be a skill or a plugin.': 'Это слишком большой архив для навыка или плагина.',
+  'This archive holds a link or a file name that points outside of it ({name}). Hearth does not open such archives.': 'В этом архиве есть ссылка или имя файла, которое ведёт за его пределы ({name}). Такие архивы Hearth не открывает.',
+  'This model has a file with a name Hearth does not accept: {name}': 'У этой модели есть файл с именем, которое Hearth не принимает: {name}',
+  'I could not get the picture.': 'Не удалось получить картинку.',
+  'The tool “{name}” was not run: it needs your approval first.': 'Инструмент «{name}» не запущен: сначала нужно ваше разрешение.',
 };

@@ -171,7 +171,7 @@ test('a plugin: skills, commands, assistants and a connector that stays off unti
   const add = tools.tools.find((x) => x.name === 'print-shop_calc__add');
   assert.ok(add, 'the plugin connector’s tool is offered');
   assert.equal(add.ask, true);
-  assert.equal(await callTool(add.name, { a: 2, b: 3 }), '5');
+  assert.equal(await callTool(add.name, { a: 2, b: 3 }, { approved: add.name }), '5');
 
   // A plugin switched off takes its parts with it.
   ext.updatePlugin('print-shop', { enabled: false });

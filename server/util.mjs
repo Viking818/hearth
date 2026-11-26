@@ -7,7 +7,13 @@ import net from 'node:net';
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export const uid = (n = 12) => crypto.randomBytes(16).toString('base64url').replace(/[-_]/g, '').slice(0, n);
+// n random letters and digits (about 6 bits each). Enough bytes are drawn for any n: before 0.2.33 the result was
+// never longer than 22 characters, whatever was asked for.
+export function uid(n = 12) {
+  let s = '';
+  while (s.length < n) s += crypto.randomBytes(Math.max(16, n)).toString('base64url').replace(/[-_]/g, '');
+  return s.slice(0, n);
+}
 
 export const hash = (s) => crypto.createHash('sha1').update(String(s)).digest('hex').slice(0, 12);
 
@@ -95,16 +101,24 @@ export function readBody(req, limit = 64 << 20) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let over = false;
     req.on('data', (c) => {
+      if (over) return; // nothing more is kept
       size += c.length;
       if (size > limit) {
+        // Let the handler answer 413 first and close the connection a moment later: closing it at once would cut
+        // the answer off, and the page would show a network error instead of the reason.
+        over = true;
+        chunks.length = 0;
         reject(Object.assign(new Error('Request is too large'), { status: 413 }));
-        req.destroy();
+        setTimeout(() => req.destroy(), 1500).unref();
         return;
       }
       chunks.push(c);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('end', () => {
+      if (!over) resolve(Buffer.concat(chunks));
+    });
     req.on('error', reject);
   });
 }
@@ -221,3 +235,18 @@ export async function findFreePort(start, host) {
   for (let p = start; p < start + 50; p++) if (await portFree(p, host)) return p;
   throw new Error(`No free port near ${start}`);
 }
+
+// The command that opens an address with the system's default program (the browser), as [program, arguments].
+// Never through a command line that a shell reads: on Windows `cmd /c start "<address>"` fills in %NAME% from the
+// environment even inside quotes, and the address of a sign-in page comes from the service being signed in to.
+export function openCommand(url, platform = process.platform) {
+  if (platform === 'darwin') return ['open', [url]];
+  if (platform === 'win32') return ['rundll32.exe', ['url.dll,FileProtocolHandler', url]];
+  return ['xdg-open', [url]];
+}
+
+// \\host\share\… (also written //host/share/…): a path on another computer. Windows contacts that computer, and
+// offers it the account's sign-in, as soon as a program asks anything about such a path, so file tools refuse it
+// before they touch it.
+export const isNetworkPath = (p) => /^[\\/]{2}/.test(String(p ?? '').trim());
+

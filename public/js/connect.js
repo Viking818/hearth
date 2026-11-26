@@ -140,7 +140,9 @@ export function ConnectPage() {
         <span class="muted" style="font-size:13.5px">${s.access === 'lan'
           ? html`${t('Other devices on your Wi-Fi can use the API at')} ${status.urls.lan.map((u) => html`<code class="mono">${u}/v1</code> `)} ${t('with the key below. The app itself is shared only with phones you pair in Settings.')}`
           : t('Only apps on this computer can use the model. They don’t need the key, but some apps insist on one, so use this.')}</span>
-        <div class="kv"><span class="k">${t('API key')}</span><${CopyField} value=${s.apiKey} mask /></div>
+        ${s.apiKey
+          ? html`<div class="kv"><span class="k">${t('API key')}</span><${CopyField} value=${s.apiKey} mask /></div>`
+          : html`<span class="muted" style="font-size:13.5px">${t('The API key is shown on the computer itself.')}</span>`}
         <button class="btn sm" style="align-self:flex-start" onClick=${newKey}><${Icon} name="key" size="sm" /> ${t('New key')}</button>
       </div>
     </div>

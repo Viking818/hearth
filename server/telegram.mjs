@@ -178,7 +178,15 @@ async function download(token, fileId) {
     throw new Error(hide(err.cause?.message || err.message, token));
   }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+  // Telegram gives bots files of up to 20 MB; nothing bigger is kept, whatever the size the message stated.
+  const chunks = [];
+  let size = 0;
+  for await (const c of res.body) {
+    size += c.length;
+    if (size > 21 << 20) throw new Error('the file is too big');
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks);
 }
 
 export async function onMessage(botId, token, msg) {
@@ -272,7 +280,7 @@ export async function onMessage(botId, token, msg) {
         notes.push(`[The photo is also saved in your work folder as ${path.relative(workFolder(bot), file).split(path.sep).join('/')}.]`);
       }
     } catch (err) {
-      return send(t('I could not get the picture: {error}', { error: err.message }));
+      return send(owner ? t('I could not get the picture: {error}', { error: hide(err.message, token) }) : t('I could not get the picture.'));
     }
   }
   if (msg.document) {

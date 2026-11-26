@@ -60,6 +60,7 @@ function tooMany(ip) {
   const now = Date.now();
   const list = (attempts.get(ip) || []).filter((x) => now - x < 60e3);
   list.push(now);
+  if (attempts.size > 2000) attempts.clear(); // never grows without end
   attempts.set(ip, list);
   return list.length > 10;
 }
@@ -79,6 +80,9 @@ export function pair(req, res, token) {
   const all = devices();
   all.push({ id: uid(8), hash: sha(secret), name, createdAt: Date.now(), lastSeen: Date.now() });
   writeJson(FILE, { devices: all.slice(-20) }, { secret: true });
+  // The secret is used up: the next device needs the new code the computer now shows. A link that was copied or a
+  // code that was photographed cannot pair a second device.
+  newPhoneToken();
   res.setHeader('set-cookie', `${COOKIE}=${secret}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; SameSite=Strict`);
   return { ok: true };
 }
@@ -104,6 +108,8 @@ export function resetDevices() {
   writeJson(FILE, { devices: [] }, { secret: true });
 }
 
+// Disconnects one device. The pairing secret is replaced too, so a link that device kept cannot bring it back.
 export function forgetDevice(id) {
   writeJson(FILE, { devices: devices().filter((d) => d.id !== id) }, { secret: true });
+  newPhoneToken();
 }

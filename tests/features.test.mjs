@@ -139,7 +139,7 @@ test('MCP: Claude Desktop config shape, and a real stdio server end to end', asy
   const l = await listTools();
   const add = l.tools.find((x) => x.name === 'calc__add');
   assert.ok(add && add.ask, 'MCP tools ask first by default');
-  assert.equal(await callTool('calc__add', { a: 2, b: 40 }), '42');
+  assert.equal(await callTool('calc__add', { a: 2, b: 40 }, { approved: 'calc__add' }), '42');
   stopMcp();
   updateSettings({ mcpConfig: '' });
 });

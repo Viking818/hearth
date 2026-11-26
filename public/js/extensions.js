@@ -770,6 +770,6 @@ export function ExtensionsPage({ route }) {
                 : html`<${Connectors} data=${data} setData=${setData} reload=${reload} dir=${dir} />`}
       </div>
     </div>
-    ${found && html`<${InstallDialog} found=${found} onClose=${() => setFound(null)} onDone=${(r, where) => { setFound(null); setData(r); if (where !== tab) goTab(where); }} />`}
+    ${found && html`<${InstallDialog} found=${found} onClose=${() => { if (found?.token) api(`/api/extensions/inspect/${found.token}`, { method: 'DELETE' }).catch(() => {}); setFound(null); }} onDone=${(r, where) => { setFound(null); setData(r); if (where !== tab) goTab(where); }} />`}
   </div></div>`;
 }

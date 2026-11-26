@@ -5,10 +5,10 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ROOT, DIRS, APP_NAME, APP_VERSION, getSettings, updateSettings, publicSettings, newApiKey, modelsDir } from './settings.mjs';
+import { ROOT, DIRS, APP_NAME, APP_VERSION, getSettings, updateSettings, publicSettings, newApiKey, modelsDir, PHONE_MAY_SET } from './settings.mjs';
 import { detectHardware, BACKEND_LABELS, backendChoices, readEngineDevices, knownEngineDevices, listEngineDevices } from './hardware.mjs';
 import { listLocalModels, findLocalModel, SOURCE_LABELS, linkShared } from './models.mjs';
-import { catalogFor, searchHf, repoChoices, hfTree, quantsOf } from './catalog.mjs';
+import { catalogFor, searchHf, repoChoices, hfTree, quantsOf, modelFileDest } from './catalog.mjs';
 import { startDownload, listDownloads, cancelDownload } from './downloads.mjs';
 import { listEngines, latestEngine, installEngine, brokenEngines } from './engine-install.mjs';
 import { planModel } from './plan.mjs';
@@ -32,7 +32,7 @@ import { updatesState, checkUpdates, scheduleUpdateChecks } from './updates.mjs'
 import { pairedDevice, lanHostOk, lanAddresses, pair, phoneInfo, setPhoneAccess, resetDevices, forgetDevice } from './phone.mjs';
 import { runWithLang, t } from './i18n.mjs';
 import { teeConsole, readServerLog } from './log.mjs';
-import { sendJson, sendError, readBody, saveBody, readJsonBody, isLoopback, uid, portFree, run, IS_MAC, IS_WIN, exists, readJson, sleep } from './util.mjs';
+import { sendJson, sendError, readBody, saveBody, readJsonBody, isLoopback, uid, portFree, run, IS_MAC, IS_WIN, exists, readJson, sleep, openCommand } from './util.mjs';
 import { holdInstance, askInstance, releaseInstance } from './instance.mjs';
 import { listBots, getBot, publicBot, createBot, saveBot, deleteBot, templates, listTasks, getTask, saveTask, deleteTask, workFiles, workFolder } from './bots.mjs';
 import { startTask, stopTask, taskView, forgetBot, forgetTask, activity, runScheduleNow, resumeBots } from './agent.mjs';
@@ -127,7 +127,8 @@ async function heicToJpeg(buf, stamp) {
 function serveFile(res, file, cache = 'no-cache') {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return sendError(res, 404, 'Not found');
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'content-length': st.size, 'cache-control': cache });
+    // nosniff: a file is what its type says. frame-ancestors: Hearth's pages are not shown inside other websites.
+    res.writeHead(200, { 'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'content-length': st.size, 'cache-control': cache, 'x-content-type-options': 'nosniff', 'content-security-policy': "frame-ancestors 'self'", 'x-frame-options': 'SAMEORIGIN' });
     fs.createReadStream(file).pipe(res);
   });
 }
@@ -140,12 +141,12 @@ function urls() {
 
 // Other devices may reach Hearth when the API is shared on the network or phones are allowed.
 const listenHost = () => (getSettings().access === 'lan' || getSettings().phoneAccess ? '0.0.0.0' : '127.0.0.1');
-async function status() {
+async function status(local = true) {
   const hw = await detectHardware();
   return {
     app: { name: APP_NAME, version: APP_VERSION, node: process.version, platform: process.platform },
     engine: engineState(),
-    settings: publicSettings(),
+    settings: publicSettings({ local }),
     hardware: { ...hw, backendLabel: BACKEND_LABELS[hw.backend] },
     urls: urls(),
     alias: engineState().model ? modelAlias(engineState().model) : getSettings().lastModel ? modelAlias(getSettings().lastModel) : '',
@@ -219,7 +220,7 @@ function hfUrl(repo, file) {
 }
 
 async function downloadModel({ repo, quant, vision = true }) {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo || '')) throw Object.assign(new Error(t('Bad repo name')), { status: 400 });
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo || '') || repo.split('/').some((x) => /^\.+$/.test(x))) throw Object.assign(new Error(t('Bad repo name')), { status: 400 });
   const { quants, mmproj } = quantsOf(await hfTree(repo));
   const q = quants.find((x) => x.quant === quant);
   if (!q) throw Object.assign(new Error(t('{quant} not found in {repo}', { quant, repo })), { status: 404 });
@@ -229,17 +230,18 @@ async function downloadModel({ repo, quant, vision = true }) {
   const root = path.join(modelsDir(), owner, name);
   const token = getSettings().hfToken;
   const headers = token ? { authorization: `Bearer ${token}` } : {};
-  const files = q.files.map((f) => ({ url: hfUrl(repo, f), dest: path.join(root, ...f.split('/')), size: sizeOf(f), headers }));
+  const place = (f) => modelFileDest(root, f);
+  const files = q.files.map((f) => ({ url: hfUrl(repo, f), dest: place(f), size: sizeOf(f), headers }));
   // A file every size shares (DeepSeek-V4.1's Engram tables) is downloaded once and skipped when it is already here.
-  if (q.shared) files.push({ url: hfUrl(repo, q.shared.from), dest: path.join(root, ...q.shared.from.split('/')), size: q.shared.size, headers });
-  if (vision && mmproj) files.push({ url: hfUrl(repo, mmproj.path), dest: path.join(root, ...mmproj.path.split('/')), size: mmproj.size, headers });
+  if (q.shared) files.push({ url: hfUrl(repo, q.shared.from), dest: place(q.shared.from), size: q.shared.size, headers });
+  if (vision && mmproj) files.push({ url: hfUrl(repo, mmproj.path), dest: place(mmproj.path), size: mmproj.size, headers });
   return startDownload({
     kind: 'model',
     label: `${name.replace(/-GGUF$/i, '')} ${quant}`,
     meta: { repo, quant },
     files,
     onDone: async () => {
-      if (q.shared) linkShared(path.join(root, ...q.shared.from.split('/')), path.join(root, ...q.shared.as.split('/')));
+      if (q.shared) linkShared(place(q.shared.from), place(q.shared.as));
       listLocalModels(true);
     },
   });
@@ -356,7 +358,12 @@ function appAllowed(req) {
 }
 
 async function handle(req, res) {
-  const url = new URL(req.url, 'http://localhost');
+  let url;
+  try {
+    url = new URL(req.url, 'http://localhost');
+  } catch {
+    return sendError(res, 400, 'Bad request'); // an address that cannot be read at all
+  }
   const p = url.pathname;
   try {
     if (p.startsWith('/v1/')) return await handleApi(req, res, url);
@@ -364,7 +371,14 @@ async function handle(req, res) {
     // A phone opening the pairing link from the QR code.
     if (p === '/api/pair' && req.method === 'POST') {
       if (!getSettings().phoneAccess || !lanHostOk(req.headers.host)) return sendError(res, 403, t('Phone access is off on the computer.'));
-      const { token } = await readJsonBody(req);
+      // A pairing code is a few dozen characters, and the caller is not known yet: take a small body, quickly.
+      const slow = setTimeout(() => req.destroy(), 5000);
+      let token;
+      try {
+        ({ token } = await readJsonBody(req, 4096));
+      } finally {
+        clearTimeout(slow);
+      }
       const r = pair(req, res, String(token || ''));
       return r.ok ? sendJson(res, 200, { ok: true }) : sendError(res, r.status, r.status === 429 ? t('Too many tries. Wait a minute.') : t('This pairing code is not valid any more. Scan the code on the computer again.'));
     }
@@ -380,7 +394,13 @@ async function handle(req, res) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return sendError(res, 405, 'Method not allowed');
     const local = isLoopback(req.socket.remoteAddress);
     if (!local && !(getSettings().phoneAccess && lanHostOk(req.headers.host))) return sendError(res, 403, t('Open Hearth on the computer it runs on. Other devices can use the API at /v1.'));
-    const file = p === '/' ? 'index.html' : decodeURIComponent(p).replace(/^\/+/, '');
+    let file;
+    try {
+      file = p === '/' ? 'index.html' : decodeURIComponent(p).replace(/^\/+/, '');
+    } catch {
+      return sendError(res, 400, 'Bad request'); // a broken % sequence
+    }
+    if (file.includes('\0')) return sendError(res, 404, 'Not found');
     const full = path.normalize(path.join(STATIC, file));
     if (!full.startsWith(STATIC + path.sep)) return sendError(res, 403, 'Forbidden');
     if (!exists(full) && !path.extname(full)) return serveFile(res, path.join(STATIC, 'index.html'));
@@ -412,7 +432,7 @@ async function handleAppApi(req, res, url) {
     return f ? serveVideo(req, res, f) : sendError(res, 404, t('Not found'));
   }
 
-  if (m === 'GET' && p === '/api/status') return sendJson(res, 200, await status());
+  if (m === 'GET' && p === '/api/status') return sendJson(res, 200, await status(isLoopback(req.socket.remoteAddress)));
   if (m === 'GET' && p === '/api/hardware') return sendJson(res, 200, await detectHardware(url.searchParams.has('refresh')));
 
   // Models on this computer and from Hugging Face
@@ -430,6 +450,7 @@ async function handleAppApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
   if (m === 'POST' && p === '/api/reveal') {
+    if (!isLoopback(req.socket.remoteAddress)) return sendError(res, 403, t('Change this on the computer itself.'));
     const { id, what } = await readJsonBody(req);
     if (what === 'models') reveal(modelsDir());
     else if (what === 'data') reveal(DIRS.data);
@@ -582,6 +603,12 @@ async function handleAppApi(req, res, url) {
     return sendJson(res, 200, extensionsState());
   }
   if (m === 'GET' && p === '/api/extensions/menu') return sendJson(res, 200, { items: slashMenu() });
+  // A preview that was closed without installing: its unpacked files go at once.
+  if (m === 'DELETE' && seg[1] === 'extensions' && seg[2] === 'inspect' && seg[3]) {
+    onComputer();
+    const { dropPreview } = await import('./ext-install.mjs');
+    return sendJson(res, 200, { ok: dropPreview(seg[3]) });
+  }
   if (m === 'POST' && p === '/api/extensions/inspect') {
     onComputer();
     if (String(req.headers['content-type'] || '').includes('application/json')) {
@@ -695,7 +722,7 @@ async function handleAppApi(req, res, url) {
   // Tools for the chat
   if (m === 'GET' && p === '/api/tools') return sendJson(res, 200, await listTools());
   if (m === 'POST' && p === '/api/tools/call') {
-    const { name, arguments: args } = await readJsonBody(req);
+    const { name, arguments: args, approved } = await readJsonBody(req);
     let parsed = args;
     if (typeof args === 'string') {
       try {
@@ -705,7 +732,7 @@ async function handleAppApi(req, res, url) {
       }
     }
     try {
-      return sendJson(res, 200, { ok: true, content: await callTool(String(name || ''), parsed) });
+      return sendJson(res, 200, { ok: true, content: await callTool(String(name || ''), parsed, { approved: typeof approved === 'string' ? approved : '' }) });
     } catch (err) {
       return sendJson(res, 200, { ok: false, error: String(err.message || err) });
     }
@@ -977,21 +1004,27 @@ async function handleAppApi(req, res, url) {
   }
 
   // Settings
-  if (m === 'GET' && p === '/api/settings') return sendJson(res, 200, publicSettings());
+  const onThisComputer = isLoopback(req.socket.remoteAddress);
+  if (m === 'GET' && p === '/api/settings') return sendJson(res, 200, publicSettings({ local: onThisComputer }));
   if (m === 'PUT' && p === '/api/settings') {
     const before = listenHost();
     const patch = await readJsonBody(req);
-    if (!isLoopback(req.socket.remoteAddress)) {
-      // A paired phone may change everyday settings, but not who can reach this computer.
-      for (const k of ['access', 'port', 'phoneAccess', 'toolFolders', 'mcpConfig', 'toolApproval', 'enginePath', 'engineArgs', 'modelsDir', 'extraModelDirs', 'keepAwake']) delete patch[k];
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return sendError(res, 400, 'Bad request');
+    if (!onThisComputer) {
+      // A paired phone may change everyday settings only (the list is in settings.mjs): not who can reach this
+      // computer, its folders and programs, or where it sends its own requests.
+      for (const k of Object.keys(patch)) if (!PHONE_MAY_SET.has(k)) delete patch[k];
     }
     updateSettings(patch);
     if ('keepAwake' in patch) awakeChanged();
-    sendJson(res, 200, publicSettings());
+    sendJson(res, 200, publicSettings({ local: onThisComputer }));
     if (listenHost() !== before) relisten(); // switch between this-computer-only and network
     return;
   }
-  if (m === 'POST' && p === '/api/settings/new-key') return sendJson(res, 200, { apiKey: newApiKey() });
+  if (m === 'POST' && p === '/api/settings/new-key') {
+    if (!onThisComputer) return sendError(res, 403, t('Change this on the computer itself.'));
+    return sendJson(res, 200, { apiKey: newApiKey() });
+  }
   // This computer: starting with Windows, and staying awake for bots and apps (power.mjs).
   if (m === 'GET' && p === '/api/power') return sendJson(res, 200, await powerState());
   if (m === 'POST' && p === '/api/power') {
@@ -1007,6 +1040,7 @@ async function handleAppApi(req, res, url) {
   }
 
   if (m === 'POST' && p === '/api/shutdown') {
+    if (!onThisComputer) return sendError(res, 403, t('Change this on the computer itself.'));
     sendJson(res, 200, { ok: true });
     setTimeout(() => shutdown(0), 100);
     return;
@@ -1069,7 +1103,8 @@ function openWindow(url) {
     if (IS_WIN) {
       const edge = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles].filter(Boolean).map((d) => path.join(d, 'Microsoft', 'Edge', 'Application', 'msedge.exe')).find(exists);
       if (edge) return appMode(edge);
-      return spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      const [cmd, args] = openCommand(url);
+      return spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     }
     for (const b of ['google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge']) {
       const full = ['/usr/bin', '/usr/local/bin', '/snap/bin'].map((d) => path.join(d, b)).find(exists);
