@@ -1,0 +1,10 @@
+# Built packages and caches
+dist/
+node_modules/
+.DS_Store
+*.log
+
+# Private notes of the author: never part of the public project
+checkups/
+my-bots/
+PROMPT-Hearth.md

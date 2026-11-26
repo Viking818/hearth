@@ -1,0 +1,24 @@
+{
+  "name": "hearth",
+  "version": "0.2.32",
+  "private": true,
+  "description": "Run AI models on your own computer: chat with documents and images, voice, bots with Telegram, pictures, video, and a local OpenAI/Anthropic API. Powered by llama.cpp.",
+  "license": "MIT",
+  "homepage": "https://github.com/Viking818/hearth",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Viking818/hearth.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "hearth": "bin/hearth.mjs"
+  },
+  "scripts": {
+    "start": "node server/index.mjs --open",
+    "serve": "node server/index.mjs",
+    "test": "node --test \"tests/*.test.mjs\""
+  }
+}

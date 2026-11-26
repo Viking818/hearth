@@ -1,0 +1,7 @@
+{
+  "name": "opusscript",
+  "version": "0.1.1",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "index.js"
+}
