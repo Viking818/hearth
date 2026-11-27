@@ -1000,6 +1000,7 @@ export function ChatPage({ route }) {
     let reasoning = '';
     let steps = [];
     let stats = null;
+    let finish = ''; // why the engine ended the last part of the answer ('length': the token limit ran out)
     let raf = 0;
     const flush = () => {
       raf = 0;
@@ -1053,6 +1054,7 @@ export function ChatPage({ route }) {
           if (!raf) raf = requestAnimationFrame(flush);
         });
         if (r.stats) stats = r.stats;
+        finish = r.finish || '';
         if (!r.calls.length || last) break;
         // The model asked for tools: run them, show each one, and give it the results.
         const ids = r.calls.map((cl, i) => cl.id || `call_${round}_${i}`);
@@ -1119,7 +1121,7 @@ export function ChatPage({ route }) {
       }
       if (raf) cancelAnimationFrame(raf);
       flush();
-      updateLast((m) => ({ ...m, content, reasoning, steps, stats: { ...(stats || {}), ms: Date.now() - t0, thinkMs: thinkStart ? (thinkEnd || Date.now()) - thinkStart : 0 } }));
+      updateLast((m) => ({ ...m, content, reasoning, steps, ...(finish === 'length' ? { finish } : {}), stats: { ...(stats || {}), ms: Date.now() - t0, thinkMs: thinkStart ? (thinkEnd || Date.now()) - thinkStart : 0 } }));
       if (!content && !reasoning) updateLast((m) => ({ ...m, error: t('The model gave an empty answer. Try again, or try another model.') }));
     } catch (err) {
       if (raf) cancelAnimationFrame(raf);

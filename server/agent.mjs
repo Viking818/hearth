@@ -7,6 +7,7 @@
 // 180,000. So old tool results are cut down once they were used, and past ~24,000 tokens the bot sums up the older
 // part of the conversation into short notes and goes on from those.
 import fs from 'node:fs';
+import { withCutNote } from '../public/js/cut.js';
 import path from 'node:path';
 import { DIRS, getSettings } from './settings.mjs';
 import { engineState, ensureEngine, resolveEngine, explainEngineError } from './engine.mjs';
@@ -398,7 +399,8 @@ async function runTurn(bot, task, cur) {
     }
     stats = out.stats;
     if (!out.calls.length || last) {
-      task.convo.push({ role: 'assistant', content: out.content });
+      // A reply that broke off is marked for the model, or it copies the habit in its next replies (public/js/cut.js).
+      task.convo.push({ role: 'assistant', content: withCutNote(out.content) });
       reply.content = out.content.trim();
       if (!reply.content) reply.error = t('The model gave an empty answer. Try again, or try another model.');
       break;

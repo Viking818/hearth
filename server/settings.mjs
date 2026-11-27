@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { readJson, writeJson, uid, keepPrivate } from './util.mjs';
 
 export const APP_NAME = 'Hearth';
-export const APP_VERSION = '0.2.33';
+export const APP_VERSION = '0.2.34';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // Big files (models, engines) must never land in an iCloud/OneDrive-synced folder like the Desktop,

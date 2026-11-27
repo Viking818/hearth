@@ -1,6 +1,6 @@
 {
   "name": "hearth",
-  "version": "0.2.33",
+  "version": "0.2.34",
   "private": true,
   "description": "Run AI models on your own computer: chat with documents and images, voice, bots with Telegram, pictures, video, and a local OpenAI/Anthropic API. Powered by llama.cpp.",
   "license": "MIT",

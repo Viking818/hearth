@@ -1,6 +1,7 @@
 // Pictures and videos in a chat message: which files count as videos, and what the model is given for them.
 // No page or browser needed here, so the tests can run it.
 import { t } from './i18n.js';
+import { withCutNote } from './cut.js';
 
 const VIDEO_TYPE = { mp4: 'video/mp4', m4v: 'video/x-m4v', mov: 'video/quicktime', webm: 'video/webm' };
 export const clock = (s) => `${Math.floor((s || 0) / 60)}:${String(Math.floor((s || 0) % 60)).padStart(2, '0')}`;
@@ -41,7 +42,8 @@ export function apiMessages(messages, { sees = true, summary = null } = {}) {
   }
   for (const m of messages) {
     if (m.role === 'assistant') {
-      if (m.content) out.push({ role: 'assistant', content: m.content });
+      // An answer that broke off is marked as such, or the model copies the habit (see cut.js).
+      if (m.content) out.push({ role: 'assistant', content: withCutNote(m.content, { stopped: m.stopped, finish: m.finish }) });
       continue;
     }
     let text = m.prompt || m.content || '';
